@@ -1,0 +1,14 @@
+# Dependency directories
+node_modules/
+
+# Turbo and build outputs
+.turbo/
+dist/
+.next/
+out/
+
+# IDE and OS files
+.idea/
+.vscode/
+.DS_Store
+*.log

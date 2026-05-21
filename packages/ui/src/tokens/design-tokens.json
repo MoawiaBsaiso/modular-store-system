@@ -1,0 +1,27 @@
+{
+  "colors": {
+    "brand": {
+      "primary": "#0284c7",
+      "primary-hover": "#0369a1",
+      "accent": "#f59e0b"
+    },
+    "neutral": {
+      "bg-shop": "#ffffff",
+      "bg-dashboard": "#f8fafc",
+      "text-main": "#0f172a",
+      "text-muted": "#64748b"
+    }
+  },
+  "spacing": {
+    "xs": "4px",
+    "sm": "8px",
+    "md": "16px",
+    "lg": "24px",
+    "xl": "32px"
+  },
+  "radius": {
+    "button": "8px",
+    "card": "16px",
+    "input": "6px"
+  }
+}
