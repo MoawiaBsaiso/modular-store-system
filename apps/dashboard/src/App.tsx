@@ -1,93 +1,111 @@
-import { useState } from 'react';
-// 1. استدعاء المكون المشترك وعقد البيانات المشتركة من حزم الـ Monorepo المحلية!
-import { Button } from '@modular/ui';
-import type { Product } from '@modular/types'; 
-// ملاحظة: سنستخدم الـ import الخاص بحزمتنا المحلية التي ربطناها في الـ package.json
-import type { Product as ModularProduct } from '@modular/types';
+import { useQuery, useMutation } from "convex/react";
+// استدعاء الدوال السحابية التي كتبناها ونقحناها معاً
+import { api } from "../../../convex/_generated/api"; 
+import { Button } from "@modular/ui";
+import { Product } from "@modular/types";
+
+// مكون فرعي لعرض كرت المنتج بشكل نظيف
+const ProductCard = ({ product }: { product: Product }) => (
+  <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100 flex flex-col justify-between">
+    <div>
+      <div className="aspect-square w-full bg-gray-50 rounded-md mb-4 overflow-hidden flex items-center justify-center border border-gray-100">
+        {product.images?.[0] ? (
+          <img src={product.images[0]} alt={product.title} className="object-cover w-full h-full" />
+        ) : (
+          <span className="text-gray-400 text-sm">لا توجد صورة</span>
+        )}
+      </div>
+      <span className="text-xs font-semibold text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-full uppercase tracking-wide">
+        {product.category}
+      </span>
+      <h3 className="mt-3 text-lg font-bold text-gray-900">{product.title}</h3>
+      <p className="mt-1 text-sm text-gray-500 line-clamp-2">{product.description}</p>
+    </div>
+    
+    <div className="mt-6 flex items-center justify-between">
+      <div>
+        <span className="text-xl font-extrabold text-gray-900">${product.price}</span>
+        {product.compareAtPrice && (
+          <span className="text-sm text-gray-400 line-through ml-2">${product.compareAtPrice}</span>
+        )}
+      </div>
+      <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+        المخزن: {product.stock}
+      </span>
+    </div>
+  </div>
+);
 
 export default function App() {
-  // 2. استخدام الـ Type المشترك للتأكد من صرامة البيانات وبيئة خالية من أخطاء الـ Run-time
-  const [products, setProducts] = useState<ModularProduct[]>([
-    {
-      id: "prod-1",
-      title: "Premium Wireless Headphones",
-      description: "Active noise-cancelling headphones with 40h battery life.",
-      price: 299,
-      compareAtPrice: 350,
-      images: ["https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=500&auto=format&fit=crop&q=60"],
-      category: "Electronics",
-      stock: 45,
-      sku: "HD-WL-001",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    },
-    {
-      id: "prod-2",
-      title: "Mechanical Gaming Keyboard",
-      description: "Tactile switches with customizable RGB backlighting.",
-      price: 129,
-      images: ["https://images.unsplash.com/photo-1618384887929-16ec33fab9ef?w=500&auto=format&fit=crop&q=60"],
-      category: "Accessories",
-      stock: 12,
-      sku: "KB-ME-002",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString()
-    }
-  ]);
+  // 1. جلب المنتجات حياً من السحاب (Real-time Query)
+  const products = useQuery(api.products.get);
+  
+  // 2. دالة الإضافة السحابية (Mutation)
+  const createProduct = useMutation(api.products.create);
 
-  const handleAddProduct = () => {
-    alert("هذه اللمسة قادمة مباشرة من الـ Context / Convex Backend قريباً!");
+  // دالة تجريبية سريعة لإضافة منتج ببيانات حقيقية للتأكد من عمل المنظومة
+  const handleAddSampleProduct = async () => {
+    try {
+      await createProduct({
+        title: `منتج سحابي #${Math.floor(Math.random() * 1000)}`,
+        description: "هذا المنتج تم إنشاؤه وضخه مباشرة من لوحة التحكم إلى قاعدة بيانات Convex السحابية بنجاح.",
+        price: 99,
+        compareAtPrice: 149,
+        images: ["https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500"],
+        category: "إلكترونيات",
+        stock: 45,
+        sku: `PROD-${Date.now().toString().slice(-5)}`
+      });
+      console.log("تم إضافة المنتج بنجاح إلى السحاب!");
+    } catch (error) {
+      console.error("خطأ أثناء إضافة المنتج:", error);
+    }
   };
 
   return (
-    <div className="min-h-screen p-lg">
-      <header className="flex items-center justify-between border-b pb-md mb-lg">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">لوحة تحكم المشرفين | Admin Dashboard</h1>
-          <p className="text-sm text-gray-500">إدارة المنتجات والمخزون بنظام مغلق هندسياً</p>
-        </div>
+    <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8" dir="rtl">
+      <div className="max-w-7xl mx-auto">
         
-        {/* 3. زر الـ UI المشترك يعمل هنا بكفاءة وتصميم موحد بالـ Tokens */}
-        <Button variant="primary" onClick={handleAddProduct}>
-          + إضافة منتج جديد
-        </Button>
-      </header>
+        {/* الهيدر */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-200 pb-6 mb-8">
+          <div>
+            <h1 className="text-3xl font-extrabold text-gray-950 tracking-tight">لوحة تحكم النظام الموديولاري</h1>
+            <p className="mt-2 text-sm text-gray-600">إدارة المنتجات المتصلة بقاعدة البيانات الحية في الوقت الفعلي.</p>
+          </div>
+          <div className="mt-4 md:mt-0">
+            {/* استخدام زر الـ UI المشترك من حزمة packages/ui */}
+            <Button  onClick={handleAddSampleProduct}>
+              ➕ إضافة منتج تجريبي للسحاب
+            </Button>
+          </div>
+        </div>
 
-      <main>
-        <h2 className="text-lg font-semibold mb-md">المنتجات الحالية ({products.length})</h2>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-md">
-          {products.map((product) => (
-            <div key={product.id} className="bg-white p-md rounded-lg shadow-sm border flex gap-md">
-              <img 
-                src={product.images[0]} 
-                alt={product.title} 
-                className="w-24 h-24 object-cover rounded-md bg-gray-100"
-              />
-              <div className="flex-1 flex flex-col justify-between">
-                <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-brand-accent bg-amber-50 px-2 py-0.5 rounded">
-                    {product.category}
-                  </span>
-                  <h3 className="font-bold text-gray-900 mt-1">{product.title}</h3>
-                  <p className="text-xs text-gray-500 line-clamp-1">{product.description}</p>
-                </div>
-                <div className="flex items-center justify-between mt-sm">
-                  <div className="flex items-baseline gap-xs">
-                    <span className="text-lg font-extrabold text-gray-900">${product.price}</span>
-                    {product.compareAtPrice && (
-                      <span className="text-xs text-gray-400 line-through">${product.compareAtPrice}</span>
-                    )}
-                  </div>
-                  <span className={`text-xs px-2 py-1 rounded-full font-medium ${product.stock < 15 ? 'bg-red-50 text-red-700' : 'bg-green-50 text-green-700'}`}>
-                    المخزون: {product.stock} قطعة (SKU: {product.sku})
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </main>
+        {/* حالة التحميل البصري */}
+        {products === undefined && (
+          <div className="text-center py-20">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+            <p className="mt-4 text-gray-500">جاري الاتصال بالسحاب وجلب البيانات الحية...</p>
+          </div>
+        )}
+
+        {/* حالة عدم وجود منتجات */}
+        {products !== undefined && products.length === 0 && (
+          <div className="text-center py-20 bg-white rounded-xl border border-dashed border-gray-300 p-12">
+            <p className="text-xl font-medium text-gray-600">لا توجد منتجات في قاعدة البيانات حالياً.</p>
+            <p className="mt-2 text-sm text-gray-400">اضغط على زر "إضافة منتج تجريبي" بالأعلى لضخ أول عنصر.</p>
+          </div>
+        )}
+
+        {/* شبكة المنتجات الحية */}
+        {products && products.length > 0 && (
+          <div className="grid grid-cols-1 gap-y-10 gap-x-6 sm:grid-cols-2 lg:grid-cols-3 xl:gap-x-8">
+            {products.map((product) => (
+              <ProductCard key={product._id} product={product as unknown as Product} />
+            ))}
+          </div>
+        )}
+
+      </div>
     </div>
   );
 }
