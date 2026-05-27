@@ -12,6 +12,22 @@ const schema = defineSchema({
     stock: v.number(),
     sku: v.string(),
   }),
+
+  orders: defineTable({
+    customerName: v.string(),
+    customerPhone: v.string(),
+    totalPrice: v.number(),
+    status: v.string(), // "pending" | "shipped"
+    // تعريف بنية المصفوفة الداخلية للـ Items المشحونة
+    items: v.array(
+      v.object({
+        productId: v.string(),
+        title: v.string(),
+        quantity: v.number(),
+        price: v.number(),
+      })
+    ),
+  }),
 });
 
 export default schema;

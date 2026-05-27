@@ -1,10 +1,12 @@
 /** @type {import('tailwindcss').Config} */
 import designTokens from '../../packages/ui/src/tokens/design-tokens.json' with { type: 'json' };
 
-// دالة مساعدة ذكية لضمان الوصول للتوكنز بأمان دون انهيار السيرفر
 const tokens = designTokens.global || designTokens;
 
 export default {
+  // 🔥 تأكد أن هذا السطر في الأعلى تماماً وخارج كائن الـ theme
+  darkMode: 'class', 
+  
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",

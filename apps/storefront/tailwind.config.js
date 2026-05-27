@@ -4,6 +4,7 @@ import designTokens from '../../packages/ui/src/tokens/design-tokens.json' with 
 const tokens = designTokens.global || designTokens;
 
 export default {
+  darkMode: 'class', // 🔥 أضفنا هذا السطر السحري هنا فقط!
   content: [
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
@@ -17,7 +18,20 @@ export default {
           'primary-hover': tokens.colors?.brand?.['primary-hover']?.value || '#333333',
           accent: tokens.colors?.brand?.accent?.value || '#f59e0b',
         },
+        neutralTokens: {
+          text: {
+            main: tokens.colors?.neutral?.text?.main?.value || '#111827',
+          }
+        }
       },
+      spacing: {
+        sm: tokens.spacing?.sm?.value || '8px',
+        md: tokens.spacing?.md?.value || '16px',
+        lg: tokens.spacing?.lg?.value || '24px',
+      },
+      borderRadius: {
+        button: tokens.borderRadius?.button?.value || '8px',
+      }
     },
   },
   plugins: [],

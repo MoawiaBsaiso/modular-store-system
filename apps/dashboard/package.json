@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@clerk/clerk-react": "^5.61.7",
     "@modular/types": "*",
     "@modular/ui": "*",
     "convex": "^1.39.1",
@@ -17,6 +18,7 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@modular/ui": "0.0.0",
     "@eslint/js": "^9.15.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

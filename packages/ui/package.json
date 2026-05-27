@@ -1,20 +1,18 @@
 {
   "name": "@modular/ui",
-  "version": "1.0.0",
   "private": true,
+  "version": "0.0.0",
+  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "lint": "eslint . --max-warnings 0"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ark-ui/react": "^4.9.2",
-    "clsx": "^2.1.1",
-    "gsap": "^3.15.0",
-    "tailwind-merge": "^2.3.0"
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   },
-  "peerDependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+  "devDependencies": {
+    "typescript": "^5.2.2"
   }
 }
