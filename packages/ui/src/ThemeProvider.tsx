@@ -1,47 +1,61 @@
-import * as React from "react";
+import * as React from "react"
 
-type Theme = "dark" | "light";
+// ─── Types ─────────────────────────────────────────────────
+export type Theme = "light" | "dark"
 
-interface ThemeContextType {
-  theme: Theme;
-  toggleTheme: () => void;
+interface ThemeContextValue {
+  theme: Theme
+  toggleTheme: () => void
+  setTheme: (theme: Theme) => void
 }
 
-const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
+// ─── Context ───────────────────────────────────────────────
+const ThemeContext = React.createContext<ThemeContextValue | undefined>(undefined)
 
-export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  // جلب الثيم المخزن مسبقاً أو استخدام الوضع الفاتح كافتراضي
-  const [theme, setTheme] = React.useState<Theme>(() => {
-    if (typeof window !== "undefined") {
-      return (localStorage.getItem("modular-theme") as Theme) || "light";
-    }
-    return "light";
-  });
+// ─── Provider ──────────────────────────────────────────────
+// المشكلة القديمة: كان يستخدم localStorage مباشرة في useState initializer
+// هاد يكسر Next.js لأن SSR يشغل الكود على السيرفر وlocalStorage غير موجود هناك
+// الحل: نتحقق من window قبل أي استخدام لـ localStorage
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  // نبدأ دائماً بـ light على السيرفر — بعدين نصحح على الـ client
+  const [theme, setThemeState] = React.useState<Theme>("light")
+  const [mounted, setMounted] = React.useState(false)
 
-  // مراقبة وتحديث الـ HTML DOM Class فور تغير الثيم
+  // هاد يشتغل فقط على الـ client بعد الـ hydration
   React.useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === "dark") {
-      root.classList.add("dark");
-    } else {
-      root.classList.remove("dark");
-    }
-    localStorage.setItem("modular-theme", theme);
-  }, [theme]);
+    const stored = localStorage.getItem("salis-theme") as Theme | null
+    const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches
+      ? "dark"
+      : "light"
+    setThemeState(stored ?? preferred)
+    setMounted(true)
+  }, [])
 
-  const toggleTheme = () => {
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
-  };
+  // تطبيق الثيم على الـ html element
+  React.useEffect(() => {
+    if (!mounted) return
+    document.documentElement.setAttribute("data-theme", theme)
+    localStorage.setItem("salis-theme", theme)
+  }, [theme, mounted])
+
+  const toggleTheme = React.useCallback(() => {
+    setThemeState(prev => (prev === "light" ? "dark" : "light"))
+  }, [])
+
+  const setTheme = React.useCallback((t: Theme) => {
+    setThemeState(t)
+  }, [])
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
       {children}
     </ThemeContext.Provider>
-  );
-};
+  )
+}
 
-export const useTheme = () => {
-  const context = React.useContext(ThemeContext);
-  if (!context) throw new Error("useTheme must be used within a ThemeProvider");
-  return context;
-};
+// ─── Hook ──────────────────────────────────────────────────
+export function useTheme(): ThemeContextValue {
+  const ctx = React.useContext(ThemeContext)
+  if (!ctx) throw new Error("useTheme must be used within ThemeProvider")
+  return ctx
+}

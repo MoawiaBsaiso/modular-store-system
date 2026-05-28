@@ -1,0 +1,802 @@
+From 788470173f7688c0f427ab4ff41bc7b8d4003a90 Mon Sep 17 00:00:00 2001
+From: Salis Dev <dev@salis.app>
+Date: Thu, 28 May 2026 20:19:57 +0000
+Subject: [PATCH] refactor(packages/ui): rebuild design system for Salis
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- Remove GSAP from InputField — packages/ui must be side-effect free
+- Replace all hardcoded colors with CSS variables (--salis-*)
+- Fix ThemeProvider SSR bug — localStorage only on client
+- ThemeToggle now uses Salis tokens
+- Button rewritten with CSS variables and inline styles
+- InputField uses CSS transitions instead of GSAP
+- Add Badge component (default/success/warning/danger/coral)
+- Add Card component with optional hover animation
+- Update design-tokens.json with full Salis palette
+- Update exports in index.ts
+- Remove gsap from package.json dependencies
+---
+ packages/ui/package.json                  |  16 ++-
+ packages/ui/src/Button.tsx                | 145 ++++++++++++++------
+ packages/ui/src/ThemeProvider.tsx         |  86 +++++++-----
+ packages/ui/src/ThemeToggle.tsx           |  56 +++++---
+ packages/ui/src/components/Badge.tsx      |  63 +++++++++
+ packages/ui/src/components/Card.tsx       |  58 ++++++++
+ packages/ui/src/components/InputField.tsx | 157 ++++++++++++++--------
+ packages/ui/src/index.ts                  |  16 ++-
+ packages/ui/src/tokens/design-tokens.json |  58 +++++---
+ 9 files changed, 477 insertions(+), 178 deletions(-)
+ create mode 100644 packages/ui/src/components/Badge.tsx
+ create mode 100644 packages/ui/src/components/Card.tsx
+
+diff --git a/packages/ui/package.json b/packages/ui/package.json
+index 455c569..2ea0404 100644
+--- a/packages/ui/package.json
++++ b/packages/ui/package.json
+@@ -1,7 +1,7 @@
+ {
+   "name": "@modular/ui",
+   "private": true,
+-  "version": "0.0.0",
++  "version": "1.0.0",
+   "type": "module",
+   "main": "./src/index.ts",
+   "types": "./src/index.ts",
+@@ -9,10 +9,16 @@
+     "typecheck": "tsc --noEmit"
+   },
+   "dependencies": {
+-    "react": "^18.3.1",
+-    "react-dom": "^18.3.1"
++    "react": "^19.0.0",
++    "react-dom": "^19.0.0"
+   },
+   "devDependencies": {
+-    "typescript": "^5.2.2"
++    "@types/react": "^19.0.0",
++    "@types/react-dom": "^19.0.0",
++    "typescript": "^5.0.0"
++  },
++  "peerDependencies": {
++    "react": ">=18.0.0",
++    "react-dom": ">=18.0.0"
+   }
+-}
+\ No newline at end of file
++}
+diff --git a/packages/ui/src/Button.tsx b/packages/ui/src/Button.tsx
+index 0c10f32..e53da81 100644
+--- a/packages/ui/src/Button.tsx
++++ b/packages/ui/src/Button.tsx
+@@ -1,54 +1,119 @@
+-import * as React from "react";
++import * as React from "react"
+ 
+-// تعريف الخصائص المتاحة للزر الذكي
++// ─── Types ─────────────────────────────────────────────────
+ export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
+-  variant?: "primary" | "secondary" | "danger" | "outline";
+-  size?: "sm" | "md" | "lg";
+-  isLoading?: boolean;
++  variant?: "primary" | "secondary" | "danger" | "outline" | "ghost"
++  size?: "sm" | "md" | "lg"
++  isLoading?: boolean
++  fullWidth?: boolean
+ }
+ 
++// ─── Styles ────────────────────────────────────────────────
++// استخدام CSS variables من Salis Design Tokens
++// بدل hardcoded colors أو Tailwind classes
++const variantStyles: Record<NonNullable<ButtonProps["variant"]>, React.CSSProperties> = {
++  primary: {
++    background: "linear-gradient(135deg, var(--salis-coral-start, #FF6B6B), var(--salis-coral-end, #FF8E53))",
++    color: "#fff",
++    border: "none",
++  },
++  secondary: {
++    background: "var(--salis-bg-surface, #F5EFE6)",
++    color: "var(--salis-text-primary, #1A1A2E)",
++    border: "1px solid var(--salis-border, #E8DDD0)",
++  },
++  danger: {
++    background: "var(--salis-danger, #EF4444)",
++    color: "#fff",
++    border: "none",
++  },
++  outline: {
++    background: "transparent",
++    color: "var(--salis-text-primary, #1A1A2E)",
++    border: "1px solid var(--salis-border, #E8DDD0)",
++  },
++  ghost: {
++    background: "transparent",
++    color: "var(--salis-text-secondary, #6B5E4E)",
++    border: "none",
++  },
++}
++
++const sizeStyles: Record<NonNullable<ButtonProps["size"]>, React.CSSProperties> = {
++  sm: { padding: "6px 14px", fontSize: "12px", borderRadius: "var(--salis-radius-sm, 8px)" },
++  md: { padding: "10px 20px", fontSize: "14px", borderRadius: "var(--salis-radius-md, 12px)" },
++  lg: { padding: "14px 28px", fontSize: "15px", borderRadius: "var(--salis-radius-md, 12px)" },
++}
++
++// ─── Component ─────────────────────────────────────────────
+ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+-  ({ className, variant = "primary", size = "md", isLoading, children, disabled, ...props }, ref) => {
+-    
+-    // الستايل الأساسي المشترك لكل الأزرار (تتضمن دعم الـ Dark Mode تلقائياً)
+-    const baseStyles = "inline-flex items-center justify-center font-bold rounded-xl transition-all duration-200 active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
+-    
+-    // ستايلات الألوان المتغيرة (Variants)
+-    const variants = {
+-      primary: "bg-indigo-600 text-white hover:bg-indigo-700 dark:bg-indigo-500 dark:hover:bg-indigo-650 dark:text-white shadow-sm",
+-      secondary: "bg-gray-100 text-gray-900 hover:bg-gray-200 dark:bg-zinc-800 dark:text-zinc-100 dark:hover:bg-zinc-700",
+-      danger: "bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600",
+-      outline: "border border-gray-300 text-gray-700 hover:bg-gray-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800/50",
+-    };
+-
+-    // ستايلات الأحجام المتغيرة (Sizes)
+-    const sizes = {
+-      sm: "px-3 py-1.5 text-xs",
+-      md: "px-4 py-2.5 text-sm",
+-      lg: "px-6 py-3.5 text-base",
+-    };
++  (
++    {
++      variant = "primary",
++      size = "md",
++      isLoading = false,
++      fullWidth = false,
++      disabled,
++      children,
++      style,
++      ...props
++    },
++    ref
++  ) => {
++    const isDisabled = disabled || isLoading
++
++    const baseStyle: React.CSSProperties = {
++      display: "inline-flex",
++      alignItems: "center",
++      justifyContent: "center",
++      gap: "8px",
++      fontWeight: 600,
++      cursor: isDisabled ? "not-allowed" : "pointer",
++      opacity: isDisabled ? 0.5 : 1,
++      transition: "opacity 150ms, transform 150ms",
++      width: fullWidth ? "100%" : undefined,
++      outline: "none",
++      fontFamily: "inherit",
++      ...variantStyles[variant],
++      ...sizeStyles[size],
++      ...style,
++    }
+ 
+     return (
+       <button
+         ref={ref}
+-        disabled={disabled || isLoading}
+-        className={`${baseStyles} ${variants[variant]} ${sizes[size]} ${className || ""}`}
++        disabled={isDisabled}
++        style={baseStyle}
++        onMouseEnter={e => { if (!isDisabled) e.currentTarget.style.opacity = "0.88" }}
++        onMouseLeave={e => { if (!isDisabled) e.currentTarget.style.opacity = "1" }}
++        onMouseDown={e => { if (!isDisabled) e.currentTarget.style.transform = "scale(0.97)" }}
++        onMouseUp={e => { e.currentTarget.style.transform = "scale(1)" }}
+         {...props}
+       >
+-        {isLoading ? (
+-          <div className="flex items-center gap-2">
+-            <svg className="animate-spin h-4 w-4 text-current" fill="none" viewBox="0 0 24 24">
+-              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+-              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+-            </svg>
+-            <span>جاري التحميل...</span>
+-          </div>
+-        ) : (
+-          children
+-        )}
++        {isLoading ? <Spinner /> : children}
+       </button>
+-    );
++    )
+   }
+-);
++)
++
++Button.displayName = "Button"
+ 
+-Button.displayName = "Button";
+\ No newline at end of file
++// ─── Spinner ───────────────────────────────────────────────
++// مكون مستقل — لا يعتمد على أي library خارجية
++function Spinner() {
++  return (
++    <svg
++      width="16" height="16"
++      viewBox="0 0 24 24"
++      fill="none"
++      stroke="currentColor"
++      strokeWidth="2.5"
++      strokeLinecap="round"
++      style={{ animation: "salis-spin 0.7s linear infinite" }}
++      aria-hidden="true"
++    >
++      <path d="M12 2a10 10 0 0 1 10 10" />
++      <style>{`@keyframes salis-spin { to { transform: rotate(360deg) } }`}</style>
++    </svg>
++  )
++}
+diff --git a/packages/ui/src/ThemeProvider.tsx b/packages/ui/src/ThemeProvider.tsx
+index 99128c0..2aafe16 100644
+--- a/packages/ui/src/ThemeProvider.tsx
++++ b/packages/ui/src/ThemeProvider.tsx
+@@ -1,47 +1,61 @@
+-import * as React from "react";
++import * as React from "react"
+ 
+-type Theme = "dark" | "light";
++// ─── Types ─────────────────────────────────────────────────
++export type Theme = "light" | "dark"
+ 
+-interface ThemeContextType {
+-  theme: Theme;
+-  toggleTheme: () => void;
++interface ThemeContextValue {
++  theme: Theme
++  toggleTheme: () => void
++  setTheme: (theme: Theme) => void
+ }
+ 
+-const ThemeContext = React.createContext<ThemeContextType | undefined>(undefined);
++// ─── Context ───────────────────────────────────────────────
++const ThemeContext = React.createContext<ThemeContextValue | undefined>(undefined)
+ 
+-export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
+-  // جلب الثيم المخزن مسبقاً أو استخدام الوضع الفاتح كافتراضي
+-  const [theme, setTheme] = React.useState<Theme>(() => {
+-    if (typeof window !== "undefined") {
+-      return (localStorage.getItem("modular-theme") as Theme) || "light";
+-    }
+-    return "light";
+-  });
++// ─── Provider ──────────────────────────────────────────────
++// المشكلة القديمة: كان يستخدم localStorage مباشرة في useState initializer
++// هاد يكسر Next.js لأن SSR يشغل الكود على السيرفر وlocalStorage غير موجود هناك
++// الحل: نتحقق من window قبل أي استخدام لـ localStorage
++export function ThemeProvider({ children }: { children: React.ReactNode }) {
++  // نبدأ دائماً بـ light على السيرفر — بعدين نصحح على الـ client
++  const [theme, setThemeState] = React.useState<Theme>("light")
++  const [mounted, setMounted] = React.useState(false)
+ 
+-  // مراقبة وتحديث الـ HTML DOM Class فور تغير الثيم
++  // هاد يشتغل فقط على الـ client بعد الـ hydration
+   React.useEffect(() => {
+-    const root = window.document.documentElement;
+-    if (theme === "dark") {
+-      root.classList.add("dark");
+-    } else {
+-      root.classList.remove("dark");
+-    }
+-    localStorage.setItem("modular-theme", theme);
+-  }, [theme]);
+-
+-  const toggleTheme = () => {
+-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+-  };
++    const stored = localStorage.getItem("salis-theme") as Theme | null
++    const preferred = window.matchMedia("(prefers-color-scheme: dark)").matches
++      ? "dark"
++      : "light"
++    setThemeState(stored ?? preferred)
++    setMounted(true)
++  }, [])
++
++  // تطبيق الثيم على الـ html element
++  React.useEffect(() => {
++    if (!mounted) return
++    document.documentElement.setAttribute("data-theme", theme)
++    localStorage.setItem("salis-theme", theme)
++  }, [theme, mounted])
++
++  const toggleTheme = React.useCallback(() => {
++    setThemeState(prev => (prev === "light" ? "dark" : "light"))
++  }, [])
++
++  const setTheme = React.useCallback((t: Theme) => {
++    setThemeState(t)
++  }, [])
+ 
+   return (
+-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
++    <ThemeContext.Provider value={{ theme, toggleTheme, setTheme }}>
+       {children}
+     </ThemeContext.Provider>
+-  );
+-};
+-
+-export const useTheme = () => {
+-  const context = React.useContext(ThemeContext);
+-  if (!context) throw new Error("useTheme must be used within a ThemeProvider");
+-  return context;
+-};
+\ No newline at end of file
++  )
++}
++
++// ─── Hook ──────────────────────────────────────────────────
++export function useTheme(): ThemeContextValue {
++  const ctx = React.useContext(ThemeContext)
++  if (!ctx) throw new Error("useTheme must be used within ThemeProvider")
++  return ctx
++}
+diff --git a/packages/ui/src/ThemeToggle.tsx b/packages/ui/src/ThemeToggle.tsx
+index 1e4198c..1b1952c 100644
+--- a/packages/ui/src/ThemeToggle.tsx
++++ b/packages/ui/src/ThemeToggle.tsx
+@@ -1,26 +1,44 @@
+-import * as React from "react";
+-import { useTheme } from "./ThemeProvider.js";
++import * as React from "react"
++import { useTheme } from "./ThemeProvider.js"
+ 
+-export const ThemeToggle = () => {
+-  const { theme, toggleTheme } = useTheme();
++// ─── Types ─────────────────────────────────────────────────
++export interface ThemeToggleProps {
++  size?: "sm" | "md"
++  style?: React.CSSProperties
++}
++
++// ─── Component ─────────────────────────────────────────────
++export function ThemeToggle({ size = "md", style }: ThemeToggleProps) {
++  const { theme, toggleTheme } = useTheme()
++  const isDark = theme === "dark"
++
++  const dimension = size === "sm" ? "32px" : "38px"
++  const iconSize = size === "sm" ? "14px" : "17px"
+ 
+   return (
+     <button
+       onClick={toggleTheme}
+-      className="p-2.5 rounded-xl bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700/80 transition-all duration-250 active:scale-95 flex items-center justify-center border border-transparent dark:border-zinc-700"
+-      aria-label="Toggle Theme"
++      aria-label={isDark ? "التحويل للوضع الفاتح" : "التحويل للوضع الداكن"}
++      title={isDark ? "وضع فاتح" : "وضع داكن"}
++      style={{
++        width: dimension,
++        height: dimension,
++        display: "flex",
++        alignItems: "center",
++        justifyContent: "center",
++        background: "var(--salis-bg-surface, #F5EFE6)",
++        border: "1px solid var(--salis-border, #E8DDD0)",
++        borderRadius: "var(--salis-radius-sm, 8px)",
++        cursor: "pointer",
++        fontSize: iconSize,
++        transition: "background 150ms, border-color 150ms",
++        outline: "none",
++        ...style,
++      }}
++      onMouseEnter={e => (e.currentTarget.style.background = "var(--salis-bg-muted, #EDE5D8)")}
++      onMouseLeave={e => (e.currentTarget.style.background = "var(--salis-bg-surface, #F5EFE6)")}
+     >
+-      {theme === "light" ? (
+-        // أيقونة القمر للتحويل إلى الليلي 🌙
+-        <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+-          <path strokeLinecap="round" strokeLinejoin="round" d="M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z" />
+-        </svg>
+-      ) : (
+-        // أيقونة الشمس للتحويل إلى الفاتح ☀️
+-        <svg className="w-5 h-5 text-amber-400" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707m2.828 5.657a4 4 0 118 0 4 4 0 01-8 0z" />
+-        </svg>
+-      )}
++      {isDark ? "☀️" : "🌙"}
+     </button>
+-  );
+-};
+\ No newline at end of file
++  )
++}
+diff --git a/packages/ui/src/components/Badge.tsx b/packages/ui/src/components/Badge.tsx
+new file mode 100644
+index 0000000..f750052
+--- /dev/null
++++ b/packages/ui/src/components/Badge.tsx
+@@ -0,0 +1,63 @@
++import * as React from "react"
++
++// ─── Types ─────────────────────────────────────────────────
++export interface BadgeProps {
++  variant?: "default" | "success" | "warning" | "danger" | "coral"
++  size?: "sm" | "md"
++  children: React.ReactNode
++  style?: React.CSSProperties
++}
++
++// ─── Styles ────────────────────────────────────────────────
++const variantStyles: Record<NonNullable<BadgeProps["variant"]>, React.CSSProperties> = {
++  default: {
++    background: "var(--salis-bg-surface, #F5EFE6)",
++    color: "var(--salis-text-secondary, #6B5E4E)",
++    border: "1px solid var(--salis-border, #E8DDD0)",
++  },
++  success: {
++    background: "#DCFCE7",
++    color: "#166534",
++    border: "1px solid #BBF7D0",
++  },
++  warning: {
++    background: "#FEF9C3",
++    color: "#854D0E",
++    border: "1px solid #FEF08A",
++  },
++  danger: {
++    background: "#FEE2E2",
++    color: "#991B1B",
++    border: "1px solid #FECACA",
++  },
++  coral: {
++    background: "linear-gradient(135deg, var(--salis-coral-start, #FF6B6B), var(--salis-coral-end, #FF8E53))",
++    color: "#fff",
++    border: "none",
++  },
++}
++
++const sizeStyles: Record<NonNullable<BadgeProps["size"]>, React.CSSProperties> = {
++  sm: { fontSize: "10px", padding: "2px 8px" },
++  md: { fontSize: "12px", padding: "3px 10px" },
++}
++
++// ─── Component ─────────────────────────────────────────────
++export function Badge({ variant = "default", size = "md", children, style }: BadgeProps) {
++  return (
++    <span
++      style={{
++        display: "inline-flex",
++        alignItems: "center",
++        fontWeight: 600,
++        borderRadius: "99px",
++        whiteSpace: "nowrap",
++        ...variantStyles[variant],
++        ...sizeStyles[size],
++        ...style,
++      }}
++    >
++      {children}
++    </span>
++  )
++}
+diff --git a/packages/ui/src/components/Card.tsx b/packages/ui/src/components/Card.tsx
+new file mode 100644
+index 0000000..6848759
+--- /dev/null
++++ b/packages/ui/src/components/Card.tsx
+@@ -0,0 +1,58 @@
++import * as React from "react"
++
++// ─── Types ─────────────────────────────────────────────────
++export interface CardProps {
++  children: React.ReactNode
++  hoverable?: boolean
++  padding?: "none" | "sm" | "md" | "lg"
++  style?: React.CSSProperties
++  className?: string
++  onClick?: () => void
++}
++
++// ─── Component ─────────────────────────────────────────────
++export function Card({
++  children,
++  hoverable = false,
++  padding = "md",
++  style,
++  className,
++  onClick,
++}: CardProps) {
++  const paddingMap = {
++    none: "0",
++    sm: "12px",
++    md: "20px",
++    lg: "28px",
++  }
++
++  return (
++    <div
++      onClick={onClick}
++      className={className}
++      style={{
++        background: "var(--salis-bg-base, #FFFBF7)",
++        border: "1px solid var(--salis-border, #E8DDD0)",
++        borderRadius: "var(--salis-radius-lg, 16px)",
++        padding: paddingMap[padding],
++        cursor: onClick ? "pointer" : undefined,
++        transition: hoverable
++          ? "transform 250ms var(--salis-ease-out, cubic-bezier(0.16,1,0.3,1)), box-shadow 250ms var(--salis-ease-out, cubic-bezier(0.16,1,0.3,1))"
++          : undefined,
++        ...style,
++      }}
++      onMouseEnter={e => {
++        if (!hoverable) return
++        e.currentTarget.style.transform = "translateY(-4px)"
++        e.currentTarget.style.boxShadow = "0 12px 40px rgba(26,26,46,0.1)"
++      }}
++      onMouseLeave={e => {
++        if (!hoverable) return
++        e.currentTarget.style.transform = "translateY(0)"
++        e.currentTarget.style.boxShadow = "none"
++      }}
++    >
++      {children}
++    </div>
++  )
++}
+diff --git a/packages/ui/src/components/InputField.tsx b/packages/ui/src/components/InputField.tsx
+index 3728e25..f27d19d 100644
+--- a/packages/ui/src/components/InputField.tsx
++++ b/packages/ui/src/components/InputField.tsx
+@@ -1,59 +1,106 @@
+-import { useLayoutEffect, useRef } from "react";
+-import gsap from "gsap";
++import * as React from "react"
+ 
++// ─── Types ─────────────────────────────────────────────────
+ export interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
+-  label: string;
+-  error?: string;
++  label: string
++  error?: string
++  hint?: string
+ }
+ 
+-export const InputField = ({ label, error, id, ...props }: InputFieldProps) => {
+-  const containerRef = useRef<HTMLDivElement>(null);
+-  const labelRef = useRef<HTMLLabelElement>(null);
+-
+-  // تأثير حركي باستخدام GSAP عند تفاعل المستخدم مع الحقل
+-  const handleFocus = () => {
+-    gsap.to(labelRef.current, {
+-      y: -36,
+-      scale: 1,
+-      color: "#4f46e5", // لون Indigo 600
+-      duration: 0.25,
+-      ease: "power2.out"
+-    });
+-  };
+-
+-  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+-    // إذا كان الحقل فارغاً، يعود الـ Label لمكانه الطبيعي
+-    if (!e.target.value) {
+-      gsap.to(labelRef.current, {
+-        y: 0,
+-        scale: 1,
+-        color: "#9ca3af", // لون Gray 400
+-        duration: 0.25,
+-        ease: "power2.inOut"
+-      });
+-    }
+-  };
+-
+-  return (
+-    <div ref={containerRef} className="relative mt-6 mb-4 font-sans" dir="rtl">
+-      <input
+-        id={id}
+-        {...props}
+-        onFocus={handleFocus}
+-        onBlur={handleBlur}
+-        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-transparent focus:outline-none focus:border-indigo-600 transition-colors bg-white shadow-sm text-sm"
+-        placeholder={label}
+-      />
+-      <label
+-        ref={labelRef}
+-        htmlFor={id}
+-        className="absolute right-4 top-3.5 text-sm text-gray-400 pointer-events-none origin-right transform"
+-      >
+-        {label}
+-      </label>
+-      {error && (
+-        <p className="mt-1.5 text-xs text-red-600 font-medium animate-pulse">{error}</p>
+-      )}
+-    </div>
+-  );
+-};
+\ No newline at end of file
++// ─── Component ─────────────────────────────────────────────
++// ملاحظة مهمة: GSAP أُزيل بالكامل من هنا
++// packages/ui يجب أن يكون "أعمى" — بدون libraries خارجية
++// الأنيميشن الآن بـ CSS transitions فقط
++export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
++  ({ label, error, hint, id, style, ...props }, ref) => {
++    const [isFocused, setIsFocused] = React.useState(false)
++    const [hasValue, setHasValue] = React.useState(
++      Boolean(props.value || props.defaultValue)
++    )
++
++    const isFloating = isFocused || hasValue
++
++    return (
++      <div style={{ display: "flex", flexDirection: "column", gap: "6px", ...style }}>
++
++        {/* Label فوق الـ input — بدون floating animation معقدة */}
++        <label
++          htmlFor={id}
++          style={{
++            fontSize: "13px",
++            fontWeight: 600,
++            color: error
++              ? "var(--salis-danger, #EF4444)"
++              : isFocused
++              ? "var(--salis-coral-start, #FF6B6B)"
++              : "var(--salis-text-secondary, #6B5E4E)",
++            transition: "color 150ms",
++            userSelect: "none",
++          }}
++        >
++          {label}
++        </label>
++
++        {/* Input */}
++        <input
++          ref={ref}
++          id={id}
++          onFocus={e => {
++            setIsFocused(true)
++            props.onFocus?.(e)
++          }}
++          onBlur={e => {
++            setIsFocused(false)
++            setHasValue(Boolean(e.target.value))
++            props.onBlur?.(e)
++          }}
++          onChange={e => {
++            setHasValue(Boolean(e.target.value))
++            props.onChange?.(e)
++          }}
++          style={{
++            width: "100%",
++            padding: "11px 14px",
++            background: "var(--salis-bg-surface, #F5EFE6)",
++            border: `1px solid ${
++              error
++                ? "var(--salis-danger, #EF4444)"
++                : isFocused
++                ? "var(--salis-coral-start, #FF6B6B)"
++                : "var(--salis-border, #E8DDD0)"
++            }`,
++            borderRadius: "var(--salis-radius-md, 12px)",
++            fontSize: "14px",
++            color: "var(--salis-text-primary, #1A1A2E)",
++            outline: "none",
++            transition: "border-color 150ms",
++            fontFamily: "inherit",
++          }}
++          {...props}
++        />
++
++        {/* Error أو Hint */}
++        {error && (
++          <p style={{
++            fontSize: "12px",
++            color: "var(--salis-danger, #EF4444)",
++            margin: 0,
++          }}>
++            {error}
++          </p>
++        )}
++        {hint && !error && (
++          <p style={{
++            fontSize: "12px",
++            color: "var(--salis-text-muted, #9B8C7C)",
++            margin: 0,
++          }}>
++            {hint}
++          </p>
++        )}
++      </div>
++    )
++  }
++)
++
++InputField.displayName = "InputField"
+diff --git a/packages/ui/src/index.ts b/packages/ui/src/index.ts
+index 67c738c..a1a0a52 100644
+--- a/packages/ui/src/index.ts
++++ b/packages/ui/src/index.ts
+@@ -1,4 +1,12 @@
+-export * from "./Button.js";
+-export * from "./ThemeProvider.js";
+-export * from "./ThemeToggle.js";
+-export * from "./components/InputField.js";
+\ No newline at end of file
++// ─── Primitives ────────────────────────────────────────────
++export * from "./Button.js"
++export * from "./ThemeProvider.js"
++export * from "./ThemeToggle.js"
++
++// ─── Components ────────────────────────────────────────────
++export * from "./components/InputField.js"
++export * from "./components/Badge.js"
++export * from "./components/Card.js"
++
++// ─── Types ─────────────────────────────────────────────────
++export type { Theme } from "./ThemeProvider.js"
+diff --git a/packages/ui/src/tokens/design-tokens.json b/packages/ui/src/tokens/design-tokens.json
+index 26c3112..d9fc6e1 100644
+--- a/packages/ui/src/tokens/design-tokens.json
++++ b/packages/ui/src/tokens/design-tokens.json
+@@ -1,27 +1,47 @@
+ {
++  "brand": {
++    "name": "Salis",
++    "version": "1.0.0"
++  },
+   "colors": {
+-    "brand": {
+-      "primary": "#0284c7",
+-      "primary-hover": "#0369a1",
+-      "accent": "#f59e0b"
++    "coral": {
++      "start": "#FF6B6B",
++      "end":   "#FF8E53"
++    },
++    "light": {
++      "bgBase":        "#FFFBF7",
++      "bgSurface":     "#F5EFE6",
++      "bgMuted":       "#EDE5D8",
++      "textPrimary":   "#1A1A2E",
++      "textSecondary": "#6B5E4E",
++      "textMuted":     "#9B8C7C",
++      "border":        "#E8DDD0"
++    },
++    "dark": {
++      "bgBase":        "#16111A",
++      "bgSurface":     "#211B28",
++      "bgMuted":       "#2D2438",
++      "textPrimary":   "#F5EFE6",
++      "textSecondary": "#C4A882",
++      "textMuted":     "#8B7355",
++      "border":        "#3D3147"
+     },
+-    "neutral": {
+-      "bg-shop": "#ffffff",
+-      "bg-dashboard": "#f8fafc",
+-      "text-main": "#0f172a",
+-      "text-muted": "#64748b"
++    "semantic": {
++      "success": "#22C55E",
++      "warning": "#F59E0B",
++      "danger":  "#EF4444"
+     }
+   },
+-  "spacing": {
+-    "xs": "4px",
++  "radius": {
+     "sm": "8px",
+-    "md": "16px",
+-    "lg": "24px",
+-    "xl": "32px"
++    "md": "12px",
++    "lg": "16px",
++    "xl": "24px"
+   },
+-  "radius": {
+-    "button": "8px",
+-    "card": "16px",
+-    "input": "6px"
++  "motion": {
++    "easeOut":     "cubic-bezier(0.16, 1, 0.3, 1)",
++    "durationFast": "150ms",
++    "durationBase": "250ms",
++    "durationSlow": "400ms"
+   }
+-}
+\ No newline at end of file
++}
+-- 
+2.43.0
+

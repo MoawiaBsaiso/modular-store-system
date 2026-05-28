@@ -1,27 +1,47 @@
 {
+  "brand": {
+    "name": "Salis",
+    "version": "1.0.0"
+  },
   "colors": {
-    "brand": {
-      "primary": "#0284c7",
-      "primary-hover": "#0369a1",
-      "accent": "#f59e0b"
+    "coral": {
+      "start": "#FF6B6B",
+      "end":   "#FF8E53"
     },
-    "neutral": {
-      "bg-shop": "#ffffff",
-      "bg-dashboard": "#f8fafc",
-      "text-main": "#0f172a",
-      "text-muted": "#64748b"
+    "light": {
+      "bgBase":        "#FFFBF7",
+      "bgSurface":     "#F5EFE6",
+      "bgMuted":       "#EDE5D8",
+      "textPrimary":   "#1A1A2E",
+      "textSecondary": "#6B5E4E",
+      "textMuted":     "#9B8C7C",
+      "border":        "#E8DDD0"
+    },
+    "dark": {
+      "bgBase":        "#16111A",
+      "bgSurface":     "#211B28",
+      "bgMuted":       "#2D2438",
+      "textPrimary":   "#F5EFE6",
+      "textSecondary": "#C4A882",
+      "textMuted":     "#8B7355",
+      "border":        "#3D3147"
+    },
+    "semantic": {
+      "success": "#22C55E",
+      "warning": "#F59E0B",
+      "danger":  "#EF4444"
     }
   },
-  "spacing": {
-    "xs": "4px",
-    "sm": "8px",
-    "md": "16px",
-    "lg": "24px",
-    "xl": "32px"
-  },
   "radius": {
-    "button": "8px",
-    "card": "16px",
-    "input": "6px"
+    "sm": "8px",
+    "md": "12px",
+    "lg": "16px",
+    "xl": "24px"
+  },
+  "motion": {
+    "easeOut":     "cubic-bezier(0.16, 1, 0.3, 1)",
+    "durationFast": "150ms",
+    "durationBase": "250ms",
+    "durationSlow": "400ms"
   }
 }

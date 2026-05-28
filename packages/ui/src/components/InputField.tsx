@@ -1,59 +1,104 @@
-import { useLayoutEffect, useRef } from "react";
-import gsap from "gsap";
+import * as React from "react"
 
+// ─── Types ─────────────────────────────────────────────────
 export interface InputFieldProps extends React.InputHTMLAttributes<HTMLInputElement> {
-  label: string;
-  error?: string;
+  label: string
+  error?: string
+  hint?: string
 }
 
-export const InputField = ({ label, error, id, ...props }: InputFieldProps) => {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const labelRef = useRef<HTMLLabelElement>(null);
+// ─── Component ─────────────────────────────────────────────
 
-  // تأثير حركي باستخدام GSAP عند تفاعل المستخدم مع الحقل
-  const handleFocus = () => {
-    gsap.to(labelRef.current, {
-      y: -36,
-      scale: 1,
-      color: "#4f46e5", // لون Indigo 600
-      duration: 0.25,
-      ease: "power2.out"
-    });
-  };
+export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
+  ({ label, error, hint, id, style, ...props }, ref) => {
+    const [isFocused, setIsFocused] = React.useState(false)
+    const [hasValue, setHasValue] = React.useState(
+      Boolean(props.value || props.defaultValue)
+    )
 
-  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
-    // إذا كان الحقل فارغاً، يعود الـ Label لمكانه الطبيعي
-    if (!e.target.value) {
-      gsap.to(labelRef.current, {
-        y: 0,
-        scale: 1,
-        color: "#9ca3af", // لون Gray 400
-        duration: 0.25,
-        ease: "power2.inOut"
-      });
-    }
-  };
+    const isFloating = isFocused || hasValue
 
-  return (
-    <div ref={containerRef} className="relative mt-6 mb-4 font-sans" dir="rtl">
-      <input
-        id={id}
-        {...props}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-gray-900 placeholder-transparent focus:outline-none focus:border-indigo-600 transition-colors bg-white shadow-sm text-sm"
-        placeholder={label}
-      />
-      <label
-        ref={labelRef}
-        htmlFor={id}
-        className="absolute right-4 top-3.5 text-sm text-gray-400 pointer-events-none origin-right transform"
-      >
-        {label}
-      </label>
-      {error && (
-        <p className="mt-1.5 text-xs text-red-600 font-medium animate-pulse">{error}</p>
-      )}
-    </div>
-  );
-};
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "6px", ...style }}>
+
+        {/* Label فوق الـ input — بدون floating animation معقدة */}
+        <label
+          htmlFor={id}
+          style={{
+            fontSize: "13px",
+            fontWeight: 600,
+            color: error
+              ? "var(--salis-danger, #EF4444)"
+              : isFocused
+              ? "var(--salis-coral-start, #FF6B6B)"
+              : "var(--salis-text-secondary, #6B5E4E)",
+            transition: "color 150ms",
+            userSelect: "none",
+          }}
+        >
+          {label}
+        </label>
+
+        {/* Input */}
+        <input
+          ref={ref}
+          id={id}
+          onFocus={e => {
+            setIsFocused(true)
+            props.onFocus?.(e)
+          }}
+          onBlur={e => {
+            setIsFocused(false)
+            setHasValue(Boolean(e.target.value))
+            props.onBlur?.(e)
+          }}
+          onChange={e => {
+            setHasValue(Boolean(e.target.value))
+            props.onChange?.(e)
+          }}
+          style={{
+            width: "100%",
+            padding: "11px 14px",
+            background: "var(--salis-bg-surface, #F5EFE6)",
+            border: `1px solid ${
+              error
+                ? "var(--salis-danger, #EF4444)"
+                : isFocused
+                ? "var(--salis-coral-start, #FF6B6B)"
+                : "var(--salis-border, #E8DDD0)"
+            }`,
+            borderRadius: "var(--salis-radius-md, 12px)",
+            fontSize: "14px",
+            color: "var(--salis-text-primary, #1A1A2E)",
+            outline: "none",
+            transition: "border-color 150ms",
+            fontFamily: "inherit",
+          }}
+          {...props}
+        />
+
+        {/* Error أو Hint */}
+        {error && (
+          <p style={{
+            fontSize: "12px",
+            color: "var(--salis-danger, #EF4444)",
+            margin: 0,
+          }}>
+            {error}
+          </p>
+        )}
+        {hint && !error && (
+          <p style={{
+            fontSize: "12px",
+            color: "var(--salis-text-muted, #9B8C7C)",
+            margin: 0,
+          }}>
+            {hint}
+          </p>
+        )}
+      </div>
+    )
+  }
+)
+
+InputField.displayName = "InputField"
