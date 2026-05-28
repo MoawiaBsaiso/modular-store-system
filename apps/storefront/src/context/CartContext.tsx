@@ -1,103 +1,81 @@
-import { createContext, useContext, useState } from "react";
-import type { ReactNode } from "react";
+'use client'
 
-// تعريف بنية العنصر داخل السلة
-export interface CartItem {
-  id: string;
-  title: string;
-  price: number;
-  image: string;
-  sku: string;
-  quantity: number;
-  maxStock: number;
+import { createContext, useContext, useState, useCallback } from 'react'
+import type { ReactNode } from 'react'
+import type { CartItem, Product } from '@/types'
+
+interface CartContextValue {
+  cart: CartItem[]
+  addToCart: (product: Product) => void
+  removeFromCart: (id: string) => void
+  updateQuantity: (id: string, delta: number) => void
+  clearCart: () => void
+  cartTotal: number
+  cartCount: number
 }
 
-interface CartContextType {
-  cart: CartItem[];
-  addToCart: (product: any) => void;
-  removeFromCart: (id: string) => void;
-  updateQuantity: (id: string, delta: number) => void;
-  clearCart: () => void;
-  cartTotal: number;
-  cartCount: number;
-}
+const CartContext = createContext<CartContextValue | undefined>(undefined)
 
-const CartContext = createContext<CartContextType | undefined>(undefined);
+export function CartProvider({ children }: { children: ReactNode }) {
+  const [cart, setCart] = useState<CartItem[]>([])
 
-export const CartProvider = ({ children }: { children: ReactNode }) => {
-  const [cart, setCart] = useState<CartItem[]>([]);
-
-  // 1. دالة إضافة منتج للسلة مع فحص المخزن المتاح
-  const addToCart = (product: any) => {
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.id === product._id);
-      
-      if (existingItem) {
-        // إذا كان المنتج موجوداً مسبقاً، نتأكد ألا نتجاوز المخزن المتاح سحابياً
-        if (existingItem.quantity >= product.stock) {
-          alert("عذراً، لقد تجاوزت الكمية المتوفرة في المستودع!");
-          return prevCart;
-        }
-        return prevCart.map((item) =>
-          item.id === product._id ? { ...item, quantity: item.quantity + 1 } : item
-        );
+  const addToCart = useCallback((product: Product) => {
+    setCart(prev => {
+      const existing = prev.find(i => i.id === product._id)
+      if (existing) {
+        if (existing.quantity >= product.stock) return prev
+        return prev.map(i =>
+          i.id === product._id ? { ...i, quantity: i.quantity + 1 } : i
+        )
       }
-
-      // إضافة عنصر جديد لأول مرة
       return [
-        ...prevCart,
+        ...prev,
         {
           id: product._id,
           title: product.title,
           price: product.price,
-          image: product.images[0] || "",
+          image: product.images[0] ?? '',
           sku: product.sku,
           quantity: 1,
           maxStock: product.stock,
         },
-      ];
-    });
-  };
+      ]
+    })
+  }, [])
 
-  // 2. حذف عنصر بالكامل من السلة
-  const removeFromCart = (id: string) => {
-    setCart((prevCart) => prevCart.filter((item) => item.id !== id));
-  };
+  const removeFromCart = useCallback((id: string) => {
+    setCart(prev => prev.filter(i => i.id !== id))
+  }, [])
 
-  // 3. تحديث الكمية (زيادة أو نقصان بالـ Delta)
-  const updateQuantity = (id: string, delta: number) => {
-    setCart((prevCart) =>
-      prevCart
-        .map((item) => {
-          if (item.id === id) {
-            const newQty = item.quantity + delta;
-            if (newQty > item.maxStock) {
-              alert("لا توجد كمية كافية بالمخزن!");
-              return item;
-            }
-            return { ...item, quantity: newQty };
-          }
-          return item;
+  const updateQuantity = useCallback((id: string, delta: number) => {
+    setCart(prev =>
+      prev
+        .map(i => {
+          if (i.id !== id) return i
+          const next = i.quantity + delta
+          if (next > i.maxStock) return i
+          return { ...i, quantity: next }
         })
-        .filter((item) => item.quantity > 0) // لو نزلت الكمية عن 1 يحذف تلقائياً
-    );
-  };
+        .filter(i => i.quantity > 0)
+    )
+  }, [])
 
-  const clearCart = () => setCart([]);
+  const clearCart = useCallback(() => setCart([]), [])
 
-  // حساب الحقول الإجمالية تلقائياً حياً
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const cartTotal = cart.reduce((sum, i) => sum + i.price * i.quantity, 0)
+  const cartCount = cart.reduce((sum, i) => sum + i.quantity, 0)
 
   return (
-    <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal, cartCount }}>
+    <CartContext.Provider
+      value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, cartTotal, cartCount }}
+    >
       {children}
     </CartContext.Provider>
-  );
-};
+  )
+}
 
-export const useCart = () => {
-  const context = useContext(CartContext);
-  if (!context) throw new Error("useCart must be used within a CartProvider");
-  return context;
-};
+export function useCartContext() {
+  const ctx = useContext(CartContext)
+  if (!ctx) throw new Error('useCartContext must be used within CartProvider')
+  return ctx
+}
