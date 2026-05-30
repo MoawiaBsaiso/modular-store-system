@@ -1,10 +1,47 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { useProducts } from '../hooks/useProducts'
 import { ProductCard } from './ProductCard'
 
 export function ProductGrid() {
   const { products, isLoading, isEmpty } = useProducts()
+  const gridRef = useRef<HTMLDivElement>(null)
+
+  // ScrollTrigger — كل card يظهر عند الـ scroll
+  useEffect(() => {
+    if (!products.length) return
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let ctx: any = null
+
+    async function animate() {
+      const { gsap } = await import('gsap')
+      const { ScrollTrigger } = await import('gsap/ScrollTrigger')
+      gsap.registerPlugin(ScrollTrigger)
+
+      ctx = gsap.context(() => {
+        const cards = gridRef.current?.querySelectorAll('.product-card')
+        if (!cards?.length) return
+
+        gsap.set(cards, { opacity: 0, y: 40 })
+
+        gsap.to(cards, {
+          opacity: 1,
+          y: 0,
+          duration: 0.6,
+          ease: 'power3.out',
+          stagger: 0.08,          // كل card يتأخر 80ms عن السابق
+          scrollTrigger: {
+            trigger: gridRef.current,
+            start: 'top 85%',     // يبدأ لما الـ grid يوصل 85% من الشاشة
+          },
+        })
+      }, gridRef)
+    }
+
+    animate()
+    return () => ctx?.revert()
+  }, [products])
 
   if (isLoading) return <ProductGridSkeleton />
 
@@ -15,7 +52,7 @@ export function ProductGrid() {
       border: '1px dashed var(--border)',
       borderRadius: 'var(--radius-xl)',
     }}>
-      <p style={{ fontSize: '2rem', margin: '0 0 12px' }}>🛍️</p>
+      <p style={{ fontSize: '2.5rem', margin: '0 0 16px' }}>🛍️</p>
       <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
         المتجر فارغ حالياً — تابعنا قريباً
       </p>
@@ -23,13 +60,19 @@ export function ProductGrid() {
   )
 
   return (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-      gap: '20px',
-    }}>
+    <div
+      ref={gridRef}
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+        gap: '20px',
+      }}
+    >
       {products.map(product => (
-        <ProductCard key={product._id} product={product} />
+        // className="product-card" عشان GSAP يلاقيها بالـ selector
+        <div key={product._id} className="product-card">
+          <ProductCard product={product} />
+        </div>
       ))}
     </div>
   )
@@ -48,19 +91,24 @@ function ProductGridSkeleton() {
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius-lg)',
           overflow: 'hidden',
-          animation: 'pulse 1.5s ease-in-out infinite',
-          animationDelay: `${i * 0.1}s`,
+          animation: 'salis-pulse 1.5s ease-in-out infinite',
+          animationDelay: `${i * 0.08}s`,
         }}>
           <div style={{ aspectRatio: '1', background: 'var(--bg-muted)' }} />
           <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <div style={{ height: 12, background: 'var(--bg-muted)', borderRadius: 6, width: '60%' }} />
-            <div style={{ height: 16, background: 'var(--bg-muted)', borderRadius: 6 }} />
-            <div style={{ height: 16, background: 'var(--bg-muted)', borderRadius: 6, width: '80%' }} />
+            <div style={{ height: 11, background: 'var(--bg-muted)', borderRadius: 6, width: '55%' }} />
+            <div style={{ height: 15, background: 'var(--bg-muted)', borderRadius: 6 }} />
+            <div style={{ height: 15, background: 'var(--bg-muted)', borderRadius: 6, width: '75%' }} />
             <div style={{ height: 44, background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)', marginTop: 8 }} />
           </div>
         </div>
       ))}
-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`}</style>
+      <style>{`
+        @keyframes salis-pulse {
+          0%, 100% { opacity: 1 }
+          50% { opacity: 0.45 }
+        }
+      `}</style>
     </div>
   )
 }

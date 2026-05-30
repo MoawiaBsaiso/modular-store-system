@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect, useRef } from 'react'
 import { useCart } from '../hooks/useCart'
 
 interface Props {
@@ -10,32 +11,80 @@ interface Props {
 
 export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
   const { cart, cartCount, cartTotal, removeFromCart, updateQuantity } = useCart()
+  const drawerRef = useRef<HTMLDivElement>(null)
+  const overlayRef = useRef<HTMLDivElement>(null)
 
-  if (!isOpen) return null
+  // GSAP — أنيميشن فتح وإغلاق الـ drawer
+  useEffect(() => {
+    async function animate() {
+      const { gsap } = await import('gsap')
+      if (!drawerRef.current || !overlayRef.current) return
+
+      if (isOpen) {
+        // فتح
+        gsap.set(drawerRef.current, { x: '100%' })
+        gsap.set(overlayRef.current, { opacity: 0, pointerEvents: 'auto' })
+        gsap.to(drawerRef.current, {
+          x: '0%',
+          duration: 0.45,
+          ease: 'power3.out',
+        })
+        gsap.to(overlayRef.current, {
+          opacity: 1,
+          duration: 0.3,
+        })
+      } else {
+        // إغلاق
+        gsap.to(drawerRef.current, {
+          x: '100%',
+          duration: 0.35,
+          ease: 'power3.in',
+        })
+        gsap.to(overlayRef.current, {
+          opacity: 0,
+          duration: 0.25,
+          onComplete: () => {
+            if (overlayRef.current) overlayRef.current.style.pointerEvents = 'none'
+          },
+        })
+      }
+    }
+    animate()
+  }, [isOpen])
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} role="dialog" aria-modal="true" aria-label="سلة المشتريات">
+    <div style={{ position: 'fixed', inset: 0, zIndex: 50, pointerEvents: isOpen ? 'auto' : 'none' }}>
       {/* Overlay */}
       <div
+        ref={overlayRef}
         onClick={onClose}
         style={{
           position: 'absolute', inset: 0,
           background: 'rgba(26,26,46,0.5)',
           backdropFilter: 'blur(4px)',
+          opacity: 0,
+          pointerEvents: 'none',
         }}
       />
 
       {/* Drawer */}
-      <div style={{
-        position: 'absolute',
-        top: 0, bottom: 0, right: 0,
-        width: '100%',
-        maxWidth: '420px',
-        background: 'var(--bg-base)',
-        borderLeft: '1px solid var(--border)',
-        display: 'flex',
-        flexDirection: 'column',
-      }}>
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="سلة المشتريات"
+        style={{
+          position: 'absolute',
+          top: 0, bottom: 0, right: 0,
+          width: '100%',
+          maxWidth: '420px',
+          background: 'var(--bg-base)',
+          borderLeft: '1px solid var(--border)',
+          display: 'flex',
+          flexDirection: 'column',
+          transform: 'translateX(100%)',
+        }}
+      >
         {/* Header */}
         <div style={{
           padding: '20px 24px',
@@ -50,13 +99,9 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
             </span>
             <span style={{
               background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
-              color: '#fff',
-              fontSize: '12px',
-              fontWeight: 600,
-              padding: '2px 8px',
-              borderRadius: '99px',
-              minWidth: '22px',
-              textAlign: 'center',
+              color: '#fff', fontSize: '12px', fontWeight: 600,
+              padding: '2px 8px', borderRadius: '99px',
+              minWidth: '22px', textAlign: 'center',
             }}>
               {cartCount}
             </span>
@@ -70,9 +115,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
               background: 'var(--bg-surface)',
               border: '1px solid var(--border)',
               borderRadius: 'var(--radius-sm)',
-              cursor: 'pointer',
-              color: 'var(--text-secondary)',
-              fontSize: '18px',
+              cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '16px',
             }}
           >
             ✕
@@ -80,17 +123,19 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
         </div>
 
         {/* Items */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        <div style={{
+          flex: 1, overflowY: 'auto',
+          padding: '16px 24px',
+          display: 'flex', flexDirection: 'column', gap: '12px',
+        }}>
           {cart.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
-              <p style={{ fontSize: '2rem', margin: '0 0 12px' }}>🛒</p>
+              <p style={{ fontSize: '2.5rem', margin: '0 0 12px' }}>🛒</p>
               <p style={{ fontSize: '14px', margin: 0 }}>سلتك فارغة</p>
             </div>
           ) : cart.map(item => (
             <div key={item.id} style={{
-              display: 'flex',
-              gap: '12px',
-              alignItems: 'center',
+              display: 'flex', gap: '12px', alignItems: 'center',
               background: 'var(--bg-surface)',
               borderRadius: 'var(--radius-md)',
               padding: '12px',
@@ -100,8 +145,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
               <div style={{
                 width: '56px', height: '56px',
                 borderRadius: 'var(--radius-sm)',
-                overflow: 'hidden',
-                flexShrink: 0,
+                overflow: 'hidden', flexShrink: 0,
                 background: 'var(--bg-muted)',
               }}>
                 {item.image && (
@@ -161,7 +205,10 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
             borderTop: '1px solid var(--border)',
             background: 'var(--bg-surface)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between',
+              alignItems: 'center', marginBottom: '16px',
+            }}>
               <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>الإجمالي</span>
               <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
                 ₪{cartTotal.toFixed(2)}
@@ -170,14 +217,10 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
             <button
               onClick={onCheckout}
               style={{
-                width: '100%',
-                padding: '14px',
+                width: '100%', padding: '14px',
                 borderRadius: 'var(--radius-md)',
-                border: 'none',
-                cursor: 'pointer',
-                fontSize: '15px',
-                fontWeight: 700,
-                color: '#fff',
+                border: 'none', cursor: 'pointer',
+                fontSize: '15px', fontWeight: 700, color: '#fff',
                 background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
                 transition: 'opacity var(--duration-fast)',
               }}

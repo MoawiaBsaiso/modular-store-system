@@ -2,14 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import { Navbar } from '@/components/layout/Navbar'
+import { HeroSection } from '@/components/layout/HeroSection'
 import { ProductGrid } from '@/features/products/components/ProductGrid'
 import { CartDrawer } from '@/features/cart/components/CartDrawer'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+import { useLenis } from '@/lib/useLenis'
 
 export default function StorePage() {
   const [isCartOpen, setIsCartOpen] = useState(false)
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
   const [isDark, setIsDark] = useState(false)
+
+  // تفعيل Lenis smooth scrolling على مستوى الصفحة
+  useLenis()
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
@@ -28,37 +33,15 @@ export default function StorePage() {
         isDark={isDark}
       />
 
-      <section style={{
+      {/* Hero مع GSAP entrance animations */}
+      <HeroSection />
+
+      {/* Products مع GSAP ScrollTrigger */}
+      <main style={{
         maxWidth: '1200px',
         margin: '0 auto',
-        padding: '64px 24px 48px',
-        textAlign: 'center',
+        padding: '0 24px 100px',
       }}>
-        <p style={{
-          fontSize: '13px', fontWeight: 600,
-          color: 'var(--coral-start)',
-          letterSpacing: '0.08em', textTransform: 'uppercase',
-          margin: '0 0 16px',
-        }}>تسوق ببساطة</p>
-
-        <h1 style={{
-          fontSize: 'clamp(2rem, 5vw, 3.2rem)', fontWeight: 800,
-          color: 'var(--text-primary)', lineHeight: 1.2,
-          letterSpacing: '-0.03em', margin: '0 0 16px',
-        }}>
-          كل ما تحتاجه،<br />
-          <span className="text-coral">في مكان واحد</span>
-        </h1>
-
-        <p style={{
-          fontSize: '16px', color: 'var(--text-secondary)',
-          maxWidth: '480px', margin: '0 auto', lineHeight: 1.7,
-        }}>
-          تصفح منتجاتنا، أضف ما يعجبك للسلة، واستلم طلبك بسهولة.
-        </p>
-      </section>
-
-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px 80px' }}>
         <ProductGrid />
       </main>
 

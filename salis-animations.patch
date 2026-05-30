@@ -1,0 +1,582 @@
+From a9942b8cf18f0a2558d175c8ea68a0122527b07c Mon Sep 17 00:00:00 2001
+From: Salis Dev <dev@salis.app>
+Date: Thu, 28 May 2026 20:54:38 +0000
+Subject: [PATCH] feat(storefront): add GSAP animations and Lenis smooth scroll
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- useLenis hook — smooth scrolling via Lenis + GSAP ticker
+- HeroSection — stagger entrance animation (badge → heading → subtitle)
+- ProductGrid — ScrollTrigger reveal animation per card (stagger 80ms)
+- CartDrawer — GSAP slide-in/out from right with overlay fade
+- Dynamic imports for GSAP — zero bundle cost until needed
+---
+ apps/storefront/src/app/page.tsx              |  39 ++----
+ .../src/components/layout/HeroSection.tsx     | 121 ++++++++++++++++++
+ .../features/cart/components/CartDrawer.tsx   | 117 +++++++++++------
+ .../products/components/ProductGrid.tsx       |  74 +++++++++--
+ apps/storefront/src/lib/useLenis.ts           |  39 ++++++
+ 5 files changed, 312 insertions(+), 78 deletions(-)
+ create mode 100644 apps/storefront/src/components/layout/HeroSection.tsx
+ create mode 100644 apps/storefront/src/lib/useLenis.ts
+
+diff --git a/apps/storefront/src/app/page.tsx b/apps/storefront/src/app/page.tsx
+index 4aa7369..c9e31ca 100644
+--- a/apps/storefront/src/app/page.tsx
++++ b/apps/storefront/src/app/page.tsx
+@@ -2,15 +2,20 @@
+ 
+ import { useState, useEffect } from 'react'
+ import { Navbar } from '@/components/layout/Navbar'
++import { HeroSection } from '@/components/layout/HeroSection'
+ import { ProductGrid } from '@/features/products/components/ProductGrid'
+ import { CartDrawer } from '@/features/cart/components/CartDrawer'
+ import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
++import { useLenis } from '@/lib/useLenis'
+ 
+ export default function StorePage() {
+   const [isCartOpen, setIsCartOpen] = useState(false)
+   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+   const [isDark, setIsDark] = useState(false)
+ 
++  // تفعيل Lenis smooth scrolling على مستوى الصفحة
++  useLenis()
++
+   useEffect(() => {
+     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+   }, [isDark])
+@@ -28,37 +33,15 @@ export default function StorePage() {
+         isDark={isDark}
+       />
+ 
+-      <section style={{
++      {/* Hero مع GSAP entrance animations */}
++      <HeroSection />
++
++      {/* Products مع GSAP ScrollTrigger */}
++      <main style={{
+         maxWidth: '1200px',
+         margin: '0 auto',
+-        padding: '64px 24px 48px',
+-        textAlign: 'center',
++        padding: '0 24px 100px',
+       }}>
+-        <p style={{
+-          fontSize: '13px', fontWeight: 600,
+-          color: 'var(--coral-start)',
+-          letterSpacing: '0.08em', textTransform: 'uppercase',
+-          margin: '0 0 16px',
+-        }}>تسوق ببساطة</p>
+-
+-        <h1 style={{
+-          fontSize: 'clamp(2rem, 5vw, 3.2rem)', fontWeight: 800,
+-          color: 'var(--text-primary)', lineHeight: 1.2,
+-          letterSpacing: '-0.03em', margin: '0 0 16px',
+-        }}>
+-          كل ما تحتاجه،<br />
+-          <span className="text-coral">في مكان واحد</span>
+-        </h1>
+-
+-        <p style={{
+-          fontSize: '16px', color: 'var(--text-secondary)',
+-          maxWidth: '480px', margin: '0 auto', lineHeight: 1.7,
+-        }}>
+-          تصفح منتجاتنا، أضف ما يعجبك للسلة، واستلم طلبك بسهولة.
+-        </p>
+-      </section>
+-
+-      <main style={{ maxWidth: '1200px', margin: '0 auto', padding: '0 24px 80px' }}>
+         <ProductGrid />
+       </main>
+ 
+diff --git a/apps/storefront/src/components/layout/HeroSection.tsx b/apps/storefront/src/components/layout/HeroSection.tsx
+new file mode 100644
+index 0000000..a400021
+--- /dev/null
++++ b/apps/storefront/src/components/layout/HeroSection.tsx
+@@ -0,0 +1,121 @@
++'use client'
++
++import { useEffect, useRef } from 'react'
++
++// HeroSection — أنيميشن دخول بـ GSAP
++// كل عنصر يدخل بـ stagger من الأسفل للأعلى
++export function HeroSection() {
++  const containerRef = useRef<HTMLElement>(null)
++  const badgeRef = useRef<HTMLParagraphElement>(null)
++  const headingRef = useRef<HTMLHeadingElement>(null)
++  const subtitleRef = useRef<HTMLParagraphElement>(null)
++
++  useEffect(() => {
++    // eslint-disable-next-line @typescript-eslint/no-explicit-any
++      let ctx: any = null
++
++    async function animate() {
++      const { gsap } = await import('gsap')
++
++      // نحدد السياق عشان نقدر نـ cleanup بسهولة
++      ctx = gsap.context(() => {
++        const tl = gsap.timeline({
++          defaults: {
++            duration: 0.8,
++            ease: 'power3.out',
++          },
++        })
++
++        // نبدأ من الحالة المخفية
++        gsap.set([badgeRef.current, headingRef.current, subtitleRef.current], {
++          opacity: 0,
++          y: 30,
++        })
++
++        // Stagger — كل عنصر يتأخر 0.15 ثانية عن اللي قبله
++        tl.to(badgeRef.current, { opacity: 1, y: 0 })
++          .to(headingRef.current, { opacity: 1, y: 0 }, '-=0.5')
++          .to(subtitleRef.current, { opacity: 1, y: 0 }, '-=0.5')
++      }, containerRef)
++    }
++
++    animate()
++
++    return () => ctx?.revert()
++  }, [])
++
++  return (
++    <section
++      ref={containerRef}
++      style={{
++        maxWidth: '1200px',
++        margin: '0 auto',
++        padding: '80px 24px 56px',
++        textAlign: 'center',
++      }}
++    >
++      {/* Badge */}
++      <p
++        ref={badgeRef}
++        style={{
++          display: 'inline-flex',
++          alignItems: 'center',
++          gap: '6px',
++          fontSize: '12px',
++          fontWeight: 600,
++          color: 'var(--coral-start)',
++          letterSpacing: '0.1em',
++          textTransform: 'uppercase',
++          margin: '0 0 20px',
++          background: '#FF6B6B12',
++          padding: '6px 14px',
++          borderRadius: '99px',
++          border: '1px solid #FF6B6B22',
++        }}
++      >
++        ✦ تسوق ببساطة
++      </p>
++
++      {/* Heading */}
++      <h1
++        ref={headingRef}
++        style={{
++          fontSize: 'clamp(2.2rem, 5.5vw, 3.6rem)',
++          fontWeight: 800,
++          color: 'var(--text-primary)',
++          lineHeight: 1.15,
++          letterSpacing: '-0.04em',
++          margin: '0 0 20px',
++        }}
++      >
++        كل ما تحتاجه،{' '}
++        <span
++          style={{
++            background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
++            WebkitBackgroundClip: 'text',
++            WebkitTextFillColor: 'transparent',
++            backgroundClip: 'text',
++          }}
++        >
++          في مكان واحد
++        </span>
++      </h1>
++
++      {/* Subtitle */}
++      <p
++        ref={subtitleRef}
++        style={{
++          fontSize: '17px',
++          color: 'var(--text-secondary)',
++          maxWidth: '460px',
++          margin: '0 auto',
++          lineHeight: 1.75,
++        }}
++      >
++        تصفح منتجاتنا، أضف ما يعجبك للسلة،
++        <br />
++        واستلم طلبك بسهولة.
++      </p>
++    </section>
++  )
++}
+diff --git a/apps/storefront/src/features/cart/components/CartDrawer.tsx b/apps/storefront/src/features/cart/components/CartDrawer.tsx
+index 55221e1..e805e6e 100644
+--- a/apps/storefront/src/features/cart/components/CartDrawer.tsx
++++ b/apps/storefront/src/features/cart/components/CartDrawer.tsx
+@@ -1,5 +1,6 @@
+ 'use client'
+ 
++import { useEffect, useRef } from 'react'
+ import { useCart } from '../hooks/useCart'
+ 
+ interface Props {
+@@ -10,32 +11,80 @@ interface Props {
+ 
+ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
+   const { cart, cartCount, cartTotal, removeFromCart, updateQuantity } = useCart()
++  const drawerRef = useRef<HTMLDivElement>(null)
++  const overlayRef = useRef<HTMLDivElement>(null)
+ 
+-  if (!isOpen) return null
++  // GSAP — أنيميشن فتح وإغلاق الـ drawer
++  useEffect(() => {
++    async function animate() {
++      const { gsap } = await import('gsap')
++      if (!drawerRef.current || !overlayRef.current) return
++
++      if (isOpen) {
++        // فتح
++        gsap.set(drawerRef.current, { x: '100%' })
++        gsap.set(overlayRef.current, { opacity: 0, pointerEvents: 'auto' })
++        gsap.to(drawerRef.current, {
++          x: '0%',
++          duration: 0.45,
++          ease: 'power3.out',
++        })
++        gsap.to(overlayRef.current, {
++          opacity: 1,
++          duration: 0.3,
++        })
++      } else {
++        // إغلاق
++        gsap.to(drawerRef.current, {
++          x: '100%',
++          duration: 0.35,
++          ease: 'power3.in',
++        })
++        gsap.to(overlayRef.current, {
++          opacity: 0,
++          duration: 0.25,
++          onComplete: () => {
++            if (overlayRef.current) overlayRef.current.style.pointerEvents = 'none'
++          },
++        })
++      }
++    }
++    animate()
++  }, [isOpen])
+ 
+   return (
+-    <div style={{ position: 'fixed', inset: 0, zIndex: 50 }} role="dialog" aria-modal="true" aria-label="سلة المشتريات">
++    <div style={{ position: 'fixed', inset: 0, zIndex: 50, pointerEvents: isOpen ? 'auto' : 'none' }}>
+       {/* Overlay */}
+       <div
++        ref={overlayRef}
+         onClick={onClose}
+         style={{
+           position: 'absolute', inset: 0,
+           background: 'rgba(26,26,46,0.5)',
+           backdropFilter: 'blur(4px)',
++          opacity: 0,
++          pointerEvents: 'none',
+         }}
+       />
+ 
+       {/* Drawer */}
+-      <div style={{
+-        position: 'absolute',
+-        top: 0, bottom: 0, right: 0,
+-        width: '100%',
+-        maxWidth: '420px',
+-        background: 'var(--bg-base)',
+-        borderLeft: '1px solid var(--border)',
+-        display: 'flex',
+-        flexDirection: 'column',
+-      }}>
++      <div
++        ref={drawerRef}
++        role="dialog"
++        aria-modal="true"
++        aria-label="سلة المشتريات"
++        style={{
++          position: 'absolute',
++          top: 0, bottom: 0, right: 0,
++          width: '100%',
++          maxWidth: '420px',
++          background: 'var(--bg-base)',
++          borderLeft: '1px solid var(--border)',
++          display: 'flex',
++          flexDirection: 'column',
++          transform: 'translateX(100%)',
++        }}
++      >
+         {/* Header */}
+         <div style={{
+           padding: '20px 24px',
+@@ -50,13 +99,9 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
+             </span>
+             <span style={{
+               background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
+-              color: '#fff',
+-              fontSize: '12px',
+-              fontWeight: 600,
+-              padding: '2px 8px',
+-              borderRadius: '99px',
+-              minWidth: '22px',
+-              textAlign: 'center',
++              color: '#fff', fontSize: '12px', fontWeight: 600,
++              padding: '2px 8px', borderRadius: '99px',
++              minWidth: '22px', textAlign: 'center',
+             }}>
+               {cartCount}
+             </span>
+@@ -70,9 +115,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
+               background: 'var(--bg-surface)',
+               border: '1px solid var(--border)',
+               borderRadius: 'var(--radius-sm)',
+-              cursor: 'pointer',
+-              color: 'var(--text-secondary)',
+-              fontSize: '18px',
++              cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '16px',
+             }}
+           >
+             ✕
+@@ -80,17 +123,19 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
+         </div>
+ 
+         {/* Items */}
+-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
++        <div style={{
++          flex: 1, overflowY: 'auto',
++          padding: '16px 24px',
++          display: 'flex', flexDirection: 'column', gap: '12px',
++        }}>
+           {cart.length === 0 ? (
+             <div style={{ textAlign: 'center', padding: '60px 0', color: 'var(--text-muted)' }}>
+-              <p style={{ fontSize: '2rem', margin: '0 0 12px' }}>🛒</p>
++              <p style={{ fontSize: '2.5rem', margin: '0 0 12px' }}>🛒</p>
+               <p style={{ fontSize: '14px', margin: 0 }}>سلتك فارغة</p>
+             </div>
+           ) : cart.map(item => (
+             <div key={item.id} style={{
+-              display: 'flex',
+-              gap: '12px',
+-              alignItems: 'center',
++              display: 'flex', gap: '12px', alignItems: 'center',
+               background: 'var(--bg-surface)',
+               borderRadius: 'var(--radius-md)',
+               padding: '12px',
+@@ -100,8 +145,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
+               <div style={{
+                 width: '56px', height: '56px',
+                 borderRadius: 'var(--radius-sm)',
+-                overflow: 'hidden',
+-                flexShrink: 0,
++                overflow: 'hidden', flexShrink: 0,
+                 background: 'var(--bg-muted)',
+               }}>
+                 {item.image && (
+@@ -161,7 +205,10 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
+             borderTop: '1px solid var(--border)',
+             background: 'var(--bg-surface)',
+           }}>
+-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
++            <div style={{
++              display: 'flex', justifyContent: 'space-between',
++              alignItems: 'center', marginBottom: '16px',
++            }}>
+               <span style={{ fontSize: '14px', color: 'var(--text-secondary)' }}>الإجمالي</span>
+               <span style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text-primary)' }}>
+                 ₪{cartTotal.toFixed(2)}
+@@ -170,14 +217,10 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
+             <button
+               onClick={onCheckout}
+               style={{
+-                width: '100%',
+-                padding: '14px',
++                width: '100%', padding: '14px',
+                 borderRadius: 'var(--radius-md)',
+-                border: 'none',
+-                cursor: 'pointer',
+-                fontSize: '15px',
+-                fontWeight: 700,
+-                color: '#fff',
++                border: 'none', cursor: 'pointer',
++                fontSize: '15px', fontWeight: 700, color: '#fff',
+                 background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
+                 transition: 'opacity var(--duration-fast)',
+               }}
+diff --git a/apps/storefront/src/features/products/components/ProductGrid.tsx b/apps/storefront/src/features/products/components/ProductGrid.tsx
+index 413e4f2..f2f03d8 100644
+--- a/apps/storefront/src/features/products/components/ProductGrid.tsx
++++ b/apps/storefront/src/features/products/components/ProductGrid.tsx
+@@ -1,10 +1,47 @@
+ 'use client'
+ 
++import { useEffect, useRef } from 'react'
+ import { useProducts } from '../hooks/useProducts'
+ import { ProductCard } from './ProductCard'
+ 
+ export function ProductGrid() {
+   const { products, isLoading, isEmpty } = useProducts()
++  const gridRef = useRef<HTMLDivElement>(null)
++
++  // ScrollTrigger — كل card يظهر عند الـ scroll
++  useEffect(() => {
++    if (!products.length) return
++    // eslint-disable-next-line @typescript-eslint/no-explicit-any
++      let ctx: any = null
++
++    async function animate() {
++      const { gsap } = await import('gsap')
++      const { ScrollTrigger } = await import('gsap/ScrollTrigger')
++      gsap.registerPlugin(ScrollTrigger)
++
++      ctx = gsap.context(() => {
++        const cards = gridRef.current?.querySelectorAll('.product-card')
++        if (!cards?.length) return
++
++        gsap.set(cards, { opacity: 0, y: 40 })
++
++        gsap.to(cards, {
++          opacity: 1,
++          y: 0,
++          duration: 0.6,
++          ease: 'power3.out',
++          stagger: 0.08,          // كل card يتأخر 80ms عن السابق
++          scrollTrigger: {
++            trigger: gridRef.current,
++            start: 'top 85%',     // يبدأ لما الـ grid يوصل 85% من الشاشة
++          },
++        })
++      }, gridRef)
++    }
++
++    animate()
++    return () => ctx?.revert()
++  }, [products])
+ 
+   if (isLoading) return <ProductGridSkeleton />
+ 
+@@ -15,7 +52,7 @@ export function ProductGrid() {
+       border: '1px dashed var(--border)',
+       borderRadius: 'var(--radius-xl)',
+     }}>
+-      <p style={{ fontSize: '2rem', margin: '0 0 12px' }}>🛍️</p>
++      <p style={{ fontSize: '2.5rem', margin: '0 0 16px' }}>🛍️</p>
+       <p style={{ fontSize: '15px', color: 'var(--text-secondary)', margin: 0 }}>
+         المتجر فارغ حالياً — تابعنا قريباً
+       </p>
+@@ -23,13 +60,19 @@ export function ProductGrid() {
+   )
+ 
+   return (
+-    <div style={{
+-      display: 'grid',
+-      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+-      gap: '20px',
+-    }}>
++    <div
++      ref={gridRef}
++      style={{
++        display: 'grid',
++        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
++        gap: '20px',
++      }}
++    >
+       {products.map(product => (
+-        <ProductCard key={product._id} product={product} />
++        // className="product-card" عشان GSAP يلاقيها بالـ selector
++        <div key={product._id} className="product-card">
++          <ProductCard product={product} />
++        </div>
+       ))}
+     </div>
+   )
+@@ -48,19 +91,24 @@ function ProductGridSkeleton() {
+           border: '1px solid var(--border)',
+           borderRadius: 'var(--radius-lg)',
+           overflow: 'hidden',
+-          animation: 'pulse 1.5s ease-in-out infinite',
+-          animationDelay: `${i * 0.1}s`,
++          animation: 'salis-pulse 1.5s ease-in-out infinite',
++          animationDelay: `${i * 0.08}s`,
+         }}>
+           <div style={{ aspectRatio: '1', background: 'var(--bg-muted)' }} />
+           <div style={{ padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+-            <div style={{ height: 12, background: 'var(--bg-muted)', borderRadius: 6, width: '60%' }} />
+-            <div style={{ height: 16, background: 'var(--bg-muted)', borderRadius: 6 }} />
+-            <div style={{ height: 16, background: 'var(--bg-muted)', borderRadius: 6, width: '80%' }} />
++            <div style={{ height: 11, background: 'var(--bg-muted)', borderRadius: 6, width: '55%' }} />
++            <div style={{ height: 15, background: 'var(--bg-muted)', borderRadius: 6 }} />
++            <div style={{ height: 15, background: 'var(--bg-muted)', borderRadius: 6, width: '75%' }} />
+             <div style={{ height: 44, background: 'var(--bg-muted)', borderRadius: 'var(--radius-md)', marginTop: 8 }} />
+           </div>
+         </div>
+       ))}
+-      <style>{`@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }`}</style>
++      <style>{`
++        @keyframes salis-pulse {
++          0%, 100% { opacity: 1 }
++          50% { opacity: 0.45 }
++        }
++      `}</style>
+     </div>
+   )
+ }
+diff --git a/apps/storefront/src/lib/useLenis.ts b/apps/storefront/src/lib/useLenis.ts
+new file mode 100644
+index 0000000..0c0cc33
+--- /dev/null
++++ b/apps/storefront/src/lib/useLenis.ts
+@@ -0,0 +1,39 @@
++'use client'
++
++import { useEffect } from 'react'
++
++// useLenis — يهيّئ Lenis smooth scrolling على مستوى الصفحة كلها
++// نستدعيه مرة واحدة في الـ layout أو الـ page الرئيسية
++export function useLenis() {
++  useEffect(() => {
++    let lenis: InstanceType<typeof import('lenis').default> | null = null
++
++    async function init() {
++      const { default: Lenis } = await import('lenis')
++
++      lenis = new Lenis({
++        duration: 1.2,
++        easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
++        orientation: 'vertical',
++        smoothWheel: true,
++      })
++
++      // ربط Lenis بـ GSAP ticker عشان يشتغلوا بنفس الـ frame rate
++      async function connectToGsap() {
++        const { gsap } = await import('gsap')
++        gsap.ticker.add((time) => {
++          lenis?.raf(time * 1000)
++        })
++        gsap.ticker.lagSmoothing(0)
++      }
++
++      connectToGsap()
++    }
++
++    init()
++
++    return () => {
++      lenis?.destroy()
++    }
++  }, [])
++}
+-- 
+2.43.0
+
