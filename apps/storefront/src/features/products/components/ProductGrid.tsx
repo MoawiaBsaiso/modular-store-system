@@ -8,11 +8,9 @@ export function ProductGrid() {
   const { products, isLoading, isEmpty } = useProducts()
   const gridRef = useRef<HTMLDivElement>(null)
 
-  // ScrollTrigger — كل card يظهر عند الـ scroll
   useEffect(() => {
     if (!products.length) return
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let ctx: any = null
+    let ctx: any = null
 
     async function animate() {
       const { gsap } = await import('gsap')
@@ -23,17 +21,20 @@ export function ProductGrid() {
         const cards = gridRef.current?.querySelectorAll('.product-card')
         if (!cards?.length) return
 
-        gsap.set(cards, { opacity: 0, y: 40 })
+        // نخفي من البداية
+        gsap.set(cards, { opacity: 0, y: 44, scale: 0.96 })
 
         gsap.to(cards, {
           opacity: 1,
           y: 0,
-          duration: 0.6,
+          scale: 1,
+          duration: 0.65,
           ease: 'power3.out',
-          stagger: 0.08,          // كل card يتأخر 80ms عن السابق
+          stagger: { each: 0.08, from: 'start' },
           scrollTrigger: {
             trigger: gridRef.current,
-            start: 'top 85%',     // يبدأ لما الـ grid يوصل 85% من الشاشة
+            start: 'top 88%',
+            once: true, // يشتغل مرة واحدة فقط
           },
         })
       }, gridRef)
@@ -47,8 +48,7 @@ export function ProductGrid() {
 
   if (isEmpty) return (
     <div style={{
-      textAlign: 'center',
-      padding: '80px 24px',
+      textAlign: 'center', padding: '80px 24px',
       border: '1px dashed var(--border)',
       borderRadius: 'var(--radius-xl)',
     }}>
@@ -60,16 +60,12 @@ export function ProductGrid() {
   )
 
   return (
-    <div
-      ref={gridRef}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-        gap: '20px',
-      }}
-    >
+    <div ref={gridRef} style={{
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+      gap: '20px',
+    }}>
       {products.map(product => (
-        // className="product-card" عشان GSAP يلاقيها بالـ selector
         <div key={product._id} className="product-card">
           <ProductCard product={product} />
         </div>
@@ -87,10 +83,8 @@ function ProductGridSkeleton() {
     }}>
       {Array.from({ length: 8 }).map((_, i) => (
         <div key={i} style={{
-          background: 'var(--bg-surface)',
-          border: '1px solid var(--border)',
-          borderRadius: 'var(--radius-lg)',
-          overflow: 'hidden',
+          background: 'var(--bg-surface)', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-lg)', overflow: 'hidden',
           animation: 'salis-pulse 1.5s ease-in-out infinite',
           animationDelay: `${i * 0.08}s`,
         }}>
@@ -103,12 +97,7 @@ function ProductGridSkeleton() {
           </div>
         </div>
       ))}
-      <style>{`
-        @keyframes salis-pulse {
-          0%, 100% { opacity: 1 }
-          50% { opacity: 0.45 }
-        }
-      `}</style>
+      <style>{`@keyframes salis-pulse{0%,100%{opacity:1}50%{opacity:.45}}`}</style>
     </div>
   )
 }

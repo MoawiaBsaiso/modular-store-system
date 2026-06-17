@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Salis — Letter Shuffle Preview</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  background: #111;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  font-family: system-ui, sans-serif;
+  gap: 20px;
+}
+
+.wrap {
+  position: relative;
+  width: 480px;
+  height: 300px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+#stage {
+  position: relative;
+  height: 100px;
+  width: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.letter {
+  position: absolute;
+  font-size: 88px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+  letter-spacing: 0;
+  text-shadow: 0 4px 24px rgba(0,0,0,0.15);
+}
+
+#tagline {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: rgba(255,255,255,0.6);
+  text-transform: uppercase;
+  opacity: 0;
+}
+
+.btn {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.3);
+  color: #fff;
+  border-radius: 10px;
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+.btn:hover { background: rgba(255,255,255,0.25); }
+
+/* panel للـ split reveal */
+#panel-top {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  z-index: 10;
+  transform: translateY(0%);
+}
+#panel-bot {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 50%;
+  background: linear-gradient(135deg, #FF8E53, #FF6B6B);
+  z-index: 10;
+  transform: translateY(0%);
+}
+
+#site-mock {
+  position: absolute;
+  inset: 0;
+  background: #FFFBF7;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 1;
+}
+.mock-nav {
+  width: 100%;
+  height: 44px;
+  background: rgba(255,251,247,0.95);
+  border-bottom: 1px solid #E8DDD0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+.mock-logo { display: flex; align-items: center; gap: 7px; }
+.mock-box {
+  width: 22px; height: 22px;
+  background: linear-gradient(135deg, #FF6B6B, #FF8E53);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+}
+.mock-box b { color: #fff; font-size: 12px; }
+.mock-name { font-weight: 700; font-size: 13px; color: #1A1A2E; }
+.mock-cart { background: #F5EFE6; border: 1px solid #E8DDD0; border-radius: 6px; padding: 4px 10px; font-size: 10px; font-weight: 600; color: #1A1A2E; }
+.mock-hero { text-align: center; padding: 16px; }
+.mock-h { font-size: 16px; font-weight: 800; color: #1A1A2E; margin-bottom: 6px; line-height: 1.3; }
+.mock-coral { background: linear-gradient(135deg,#FF6B6B,#FF8E53); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.mock-sub { font-size: 10px; color: #6B5E4E; }
+.mock-cards { display: flex; gap: 8px; padding: 0 16px; }
+.mc { flex: 1; background: #F5EFE6; border: 1px solid #E8DDD0; border-radius: 8px; overflow: hidden; }
+.mc-img { height: 44px; background: #EDE5D8; }
+.mc-b { padding: 5px; }
+.mc-t { font-size: 8px; font-weight: 700; color: #1A1A2E; margin-bottom: 2px; }
+.mc-p { font-size: 8px; color: #6B5E4E; margin-bottom: 3px; }
+.mc-btn { height: 14px; background: linear-gradient(135deg,#FF6B6B,#FF8E53); border-radius: 4px; }
+</style>
+</head>
+<body>
+
+<div class="wrap" id="mainWrap">
+  <!-- site mock خلف الـ panels -->
+  <div id="site-mock">
+    <div class="mock-nav">
+      <div class="mock-logo">
+        <div class="mock-box"><b>S</b></div>
+        <span class="mock-name">Salis</span>
+      </div>
+      <div class="mock-cart">🛒 السلة</div>
+    </div>
+    <div class="mock-hero">
+      <div class="mock-h">كل ما تحتاجه<br><span class="mock-coral">في مكان واحد</span></div>
+      <p class="mock-sub">تسوق ببساطة وسرعة</p>
+    </div>
+    <div class="mock-cards">
+      <div class="mc"><div class="mc-img"></div><div class="mc-b"><p class="mc-t">قميص كتان</p><p class="mc-p">₪89</p><div class="mc-btn"></div></div></div>
+      <div class="mc"><div class="mc-img"></div><div class="mc-b"><p class="mc-t">حقيبة جلد</p><p class="mc-p">₪220</p><div class="mc-btn"></div></div></div>
+      <div class="mc"><div class="mc-img"></div><div class="mc-b"><p class="mc-t">كورس تصميم</p><p class="mc-p">₪149</p><div class="mc-btn"></div></div></div>
+    </div>
+  </div>
+
+  <!-- panels فوق الـ site -->
+  <div id="panel-top"></div>
+  <div id="panel-bot"></div>
+
+  <!-- letters + tagline فوق كل شيء -->
+  <div id="stage"></div>
+  <p id="tagline">تسوق ببساطة</p>
+</div>
+
+<button class="btn" onclick="runIntro()">↺ أعد التشغيل</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script>
+// ── إعداد الحروف ──────────────────────────────────────────
+const WORD     = 'Salis'
+const CHARS    = WORD.split('')
+const N        = CHARS.length
+// المواقع الثابتة لكل حرف (x من المركز)
+const SPREAD   = 68  // المسافة بين الحروف
+
+function getTargetX(index) {
+  // توزيع متمركز
+  return (index - (N - 1) / 2) * SPREAD
+}
+
+// بناء عناصر الحروف
+const stage = document.getElementById('stage')
+const letterEls = []
+
+CHARS.forEach((ch, i) => {
+  const el = document.createElement('span')
+  el.className = 'letter'
+  el.textContent = ch
+  el.dataset.index = i
+  stage.appendChild(el)
+  letterEls.push(el)
+})
+
+// ── الدالة الرئيسية ────────────────────────────────────────
+let running = false
+
+function runIntro() {
+  if (running) return
+  running = true
+
+  const tagline  = document.getElementById('tagline')
+  const panelTop = document.getElementById('panel-top')
+  const panelBot = document.getElementById('panel-bot')
+
+  // ─── reset ───
+  gsap.set(panelTop,  { y: '0%' })
+  gsap.set(panelBot,  { y: '0%' })
+  gsap.set(tagline,   { opacity: 0, y: 6 })
+
+  // كل حرف يبدأ من موقعه الصحيح لكن مخفي
+  letterEls.forEach((el, i) => {
+    gsap.set(el, {
+      x: getTargetX(i),
+      y: 60,
+      opacity: 0,
+      scaleY: 0,
+      transformOrigin: 'bottom center',
+    })
+  })
+
+  const tl = gsap.timeline({
+    onComplete: () => { running = false }
+  })
+
+  // ═══════════════════════════════════════════════
+  // المرحلة ١ — ظهور الحروف بـ elastic stagger
+  // ═══════════════════════════════════════════════
+  tl.to(letterEls, {
+    y: 0,
+    opacity: 1,
+    scaleY: 1,
+    duration: 0.65,
+    ease: 'elastic.out(1, 0.5)',
+    stagger: {
+      each: 0.08,
+      from: 'center', // تبدأ من المنتصف للخارج
+    },
+  })
+
+  // ═══════════════════════════════════════════════
+  // المرحلة ٢ — shuffle شبه عشوائي للحروف
+  // كل حرف يتبادل مكانه مع حرف آخر بـ timing غير منتظم
+  // ═══════════════════════════════════════════════
+  tl.add(() => {
+    // نحسب ترتيب shuffle مسبقاً — يبدو عشوائي لكن في الحقيقة مدروس
+    // [2, 0, 4, 1, 3] — المنتصف أول، بعدين الأطراف، بعدين ما بينهم
+    const shuffleOrder = [2, 0, 4, 1, 3]
+    const shufflePositions = shuffleOrder.map(i => getTargetX(i))
+
+    // كل حرف يروح لموقع حرف ثاني بـ delay مختلف قليلاً
+    letterEls.forEach((el, i) => {
+      const targetX   = shufflePositions[i]
+      const randDelay = i * 0.055 + (i % 2 === 0 ? 0.02 : 0)  // شبه عشوائي
+
+      gsap.to(el, {
+        x: targetX,
+        duration: 0.45,
+        ease: 'power3.inOut',
+        delay: randDelay,
+      })
+
+      // bounce خفيف في المنتصف
+      gsap.to(el, {
+        y: -14,
+        duration: 0.2,
+        ease: 'power2.out',
+        delay: randDelay + 0.1,
+        yoyo: true,
+        repeat: 1,
+      })
+    })
+  }, '+=0.15')
+
+  // انتظار انتهاء الـ shuffle
+  tl.to({}, { duration: 0.75 })
+
+  // ═══════════════════════════════════════════════
+  // المرحلة ٣ — الحروف ترجع لمواقعها الأصلية
+  // ═══════════════════════════════════════════════
+  tl.add(() => {
+    letterEls.forEach((el, i) => {
+      const delay = Math.abs(i - 2) * 0.04  // من الأطراف للمركز
+      gsap.to(el, {
+        x: getTargetX(i),
+        duration: 0.5,
+        ease: 'back.out(1.4)',
+        delay,
+      })
+    })
+  })
+
+  tl.to({}, { duration: 0.55 })
+
+  // tagline
+  tl.to(tagline, {
+    opacity: 1,
+    y: 0,
+    duration: 0.4,
+    ease: 'power3.out',
+  }, '-=0.1')
+
+  tl.to({}, { duration: 0.7 })
+
+  // ═══════════════════════════════════════════════
+  // المرحلة ٤ — fade الحروف والـ tagline
+  // ═══════════════════════════════════════════════
+  tl.to([...letterEls, tagline], {
+    opacity: 0,
+    y: -16,
+    duration: 0.3,
+    ease: 'power2.in',
+    stagger: 0.03,
+  })
+
+  // ═══════════════════════════════════════════════
+  // المرحلة ٥ — بوابة المصعد تنفتح
+  // ═══════════════════════════════════════════════
+  tl.to(panelTop, {
+    y: '-100%',
+    duration: 0.9,
+    ease: 'power4.inOut',
+  }, '-=0.05')
+
+  tl.to(panelBot, {
+    y: '100%',
+    duration: 0.9,
+    ease: 'power4.inOut',
+  }, '<')
+}
+
+// تشغيل تلقائي
+runIntro()
+</script>
+</body>
+</html>

@@ -1,0 +1,573 @@
+From 997ff2d602ce8184970870121bff1002d2558e9c Mon Sep 17 00:00:00 2001
+From: Salis Dev <dev@salis.app>
+Date: Sat, 30 May 2026 11:01:32 +0000
+Subject: [PATCH] feat(storefront): pipe shuffle intro + fix content flash
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- IntroLoader: silaS → Salis via pipe rotation animation
+  each step: last letter flies to front, rest slide right
+  4 rotations total with elastic bounce on arrival
+- Fix content flash: page content hidden (opacity:0) until intro complete
+- Both animation options preserved via ANIMATION_TYPE constant
+- tl.call(onComplete) replaces broken onComplete in set()
+---
+ apps/storefront/src/app/page.tsx              |  55 ++--
+ .../src/components/layout/IntroLoader.tsx     | 266 +++++++++++-------
+ 2 files changed, 192 insertions(+), 129 deletions(-)
+
+diff --git a/apps/storefront/src/app/page.tsx b/apps/storefront/src/app/page.tsx
+index 98f29be..06c709c 100644
+--- a/apps/storefront/src/app/page.tsx
++++ b/apps/storefront/src/app/page.tsx
+@@ -1,8 +1,8 @@
+ 'use client'
+ 
+ import { useState, useEffect, useCallback } from 'react'
+-import { HeroSection } from '@/components/layout/HeroSection'
+ import { IntroLoader } from '@/components/layout/IntroLoader'
++import { HeroSection } from '@/components/layout/HeroSection'
+ import { Navbar } from '@/components/layout/Navbar'
+ import { ProductGrid } from '@/features/products/components/ProductGrid'
+ import { CartDrawer } from '@/features/cart/components/CartDrawer'
+@@ -10,10 +10,10 @@ import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+ import { useLenis } from '@/lib/useLenis'
+ 
+ export default function StorePage() {
+-  const [introComplete, setIntroComplete] = useState(false)
+-  const [isCartOpen, setIsCartOpen]       = useState(false)
++  const [introComplete, setIntroComplete]   = useState(false)
++  const [isCartOpen, setIsCartOpen]         = useState(false)
+   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+-  const [isDark, setIsDark]               = useState(false)
++  const [isDark, setIsDark]                 = useState(false)
+ 
+   useLenis()
+ 
+@@ -21,26 +21,23 @@ export default function StorePage() {
+     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+   }, [isDark])
+ 
+-  // بعد الـ intro تنتهي، نفعّل الـ HeroSection
+   const handleIntroComplete = useCallback(() => {
+     setIntroComplete(true)
+   }, [])
+ 
+-  const handleCheckout = () => {
+-    setIsCartOpen(false)
+-    setIsCheckoutOpen(true)
+-  }
+-
+   return (
+     <>
+-      {/* Intro Loader — يختفي بعد ما ينتهي الأنيميشن */}
++      {/* الـ Intro يُعرض دائماً أولاً */}
+       <IntroLoader onComplete={handleIntroComplete} />
+ 
+-      {/* Hero — يبدأ أنيميشنه بعد انتهاء الـ intro */}
+-      <HeroSection ready={introComplete} />
+-
+-      {/* Navbar الفعلي — يظهر بعد الـ intro */}
+-      {introComplete && (
++      {/* كل المحتوى مخفي حتى ينتهي الـ intro */}
++      <div style={{
++        opacity: introComplete ? 1 : 0,
++        // لا نستخدم visibility:hidden عشان لا يأثر على الـ layout
++        transition: 'none',
++        pointerEvents: introComplete ? 'auto' : 'none',
++      }}>
++        {/* Navbar */}
+         <div style={{
+           position: 'fixed', top: 0, left: 0, right: 0,
+           zIndex: 40,
+@@ -51,21 +48,27 @@ export default function StorePage() {
+             isDark={isDark}
+           />
+         </div>
+-      )}
+ 
+-      {/* Products */}
+-      <main style={{
+-        maxWidth: '1200px',
+-        margin: '0 auto',
+-        padding: '0 24px 100px',
+-      }}>
+-        <ProductGrid />
+-      </main>
++        {/* Hero — يبدأ أنيميشنه بعد انتهاء الـ intro */}
++        <HeroSection ready={introComplete} />
++
++        {/* Products */}
++        <main style={{
++          maxWidth: '1200px',
++          margin: '0 auto',
++          padding: '0 24px 100px',
++        }}>
++          <ProductGrid />
++        </main>
++      </div>
+ 
+       <CartDrawer
+         isOpen={isCartOpen}
+         onClose={() => setIsCartOpen(false)}
+-        onCheckout={handleCheckout}
++        onCheckout={() => {
++          setIsCartOpen(false)
++          setIsCheckoutOpen(true)
++        }}
+       />
+ 
+       <CheckoutModal
+diff --git a/apps/storefront/src/components/layout/IntroLoader.tsx b/apps/storefront/src/components/layout/IntroLoader.tsx
+index da6b2ea..38cb636 100644
+--- a/apps/storefront/src/components/layout/IntroLoader.tsx
++++ b/apps/storefront/src/components/layout/IntroLoader.tsx
+@@ -8,98 +8,189 @@ interface Props {
+ 
+ // ═══════════════════════════════════════════════════════════
+ // لتبديل بين الأنيميشنين — غيّر هاد السطر فقط:
+-//   'typography'  →  حروف تنبثق + بوابة مصعد
++//   'typography'  →  حروف تنبثق + pipe shuffle + بوابة مصعد
+ //   'fill'        →  نص يمتلئ + curtain للأعلى
+ // ═══════════════════════════════════════════════════════════
+ const ANIMATION_TYPE: 'typography' | 'fill' = 'typography'
+ 
++// الكلمة المعكوسة كبداية — silaS
++// كل rotation: آخر حرف يطير للأول والباقي يتزحلقون يميناً
++// بعد 4 rotations تصير Salis
++const WORD_FINAL = ['S', 'a', 'l', 'i', 's']
++const WORD_START = ['s', 'i', 'l', 'a', 'S'] // معكوسة
++
++const N      = 5
++const SPREAD = 72 // المسافة بين الحروف بالـ px
++
++function getX(index: number) {
++  return (index - (N - 1) / 2) * SPREAD
++}
++
+ export function IntroLoader({ onComplete }: Props) {
+-  const panelTopRef  = useRef<HTMLDivElement>(null)
+-  const panelBotRef  = useRef<HTMLDivElement>(null)
+-  const panelSingle  = useRef<HTMLDivElement>(null)
+-  const lettersRef   = useRef<HTMLDivElement>(null)
+-  const fillTextRef  = useRef<HTMLSpanElement>(null)
+-  const progressRef  = useRef<HTMLDivElement>(null)
+-  const taglineRef   = useRef<HTMLParagraphElement>(null)
+-  const wrapperRef   = useRef<HTMLDivElement>(null)
++  const panelTopRef = useRef<HTMLDivElement>(null)
++  const panelBotRef = useRef<HTMLDivElement>(null)
++  const panelSingle = useRef<HTMLDivElement>(null)
++  const stageRef    = useRef<HTMLDivElement>(null)
++  const fillTextRef = useRef<HTMLSpanElement>(null)
++  const progressRef = useRef<HTMLDivElement>(null)
++  const taglineRef  = useRef<HTMLParagraphElement>(null)
++  const wrapperRef  = useRef<HTMLDivElement>(null)
+ 
+   useEffect(() => {
+-    let ctx: any = null
++    let gsapCtx: any = null
+ 
+     async function run() {
+       const { gsap } = await import('gsap')
+ 
+-      ctx = gsap.context(async () => {
++      gsapCtx = gsap.context(async () => {
+ 
+-        // ─────────────────────────────────────────────
+-        // OPTION A: Typography Morphing + بوابة مصعد
+-        // ─────────────────────────────────────────────
++        // ─────────────────────────────────────────────────────
++        // OPTION A — Typography Pipe Shuffle + بوابة مصعد
++        // ─────────────────────────────────────────────────────
+         if (ANIMATION_TYPE === 'typography') {
+-          const letters = Array.from(
+-            lettersRef.current?.querySelectorAll('.salis-letter') ?? []
+-          )
++          if (!stageRef.current) return
++
++          // نبني span لكل حرف بـ position absolute
++          // نبدأ بـ silaS
++          const letterEls: HTMLSpanElement[] = []
++
++          WORD_START.forEach((char, i) => {
++            const el = document.createElement('span')
++            el.textContent = char
++            el.style.cssText = `
++              position: absolute;
++              font-size: clamp(56px, 11vw, 88px);
++              font-weight: 900;
++              color: #fff;
++              line-height: 1;
++              display: inline-block;
++              will-change: transform;
++              letter-spacing: -1px;
++            `
++            stageRef.current!.appendChild(el)
++            letterEls.push(el)
++          })
++
++          // نضع كل حرف في موقعه الأولي مخفياً
++          letterEls.forEach((el, i) => {
++            gsap.set(el, {
++              x: getX(i),
++              y: 60,
++              opacity: 0,
++              scaleY: 0,
++              transformOrigin: 'bottom center',
++            })
++          })
+ 
+-          gsap.set(letters,       { scaleY: 0, y: 40, opacity: 0, transformOrigin: 'bottom center' })
+           gsap.set(taglineRef.current, { opacity: 0, y: 8 })
+ 
+           const tl = gsap.timeline()
+ 
+-          // ١ — حروف تنبثق بـ elastic liquid
+-          tl.to(letters, {
+-            scaleY: 1, y: 0, opacity: 1,
+-            duration: 0.75,
+-            ease: 'elastic.out(1, 0.45)',
+-            stagger: 0.09,
++          // ١ — ظهور بـ elastic من المركز للخارج
++          tl.to(letterEls, {
++            y: 0,
++            opacity: 1,
++            scaleY: 1,
++            duration: 0.65,
++            ease: 'elastic.out(1, 0.48)',
++            stagger: { each: 0.09, from: 'center' },
+           })
+ 
+-          // ٢ — الحروف تتباعد
+-          tl.to(lettersRef.current, {
+-            gap: '10px',
+-            duration: 0.5,
+-            ease: 'power3.out',
+-          }, '-=0.25')
++          tl.to({}, { duration: 0.25 })
++
++          // ٢ — Pipe Shuffle: 4 rotations
++          // كل rotation: آخر حرف يطير للأول، الباقي يتزحلقون
++          // currentPositions[i] = الموقع الحالي للحرف i
++          let currentPositions = [0, 1, 2, 3, 4] // كل حرف في موقعه
++
++          for (let step = 0; step < 4; step++) {
++            // الحرف الموجود في آخر موقع (index 4)
++            const lastCharIdx = currentPositions.indexOf(4)
++            const lastEl = letterEls[lastCharIdx]
++
++            // نحسب الـ x الحالي والمستهدف
++            const fromX = getX(4)
++            const toX   = getX(0)
++
++            // الحرف الأخير يطير للأعلى ويتحرك لليسار
++            tl.to(lastEl, {
++              y: -44,
++              duration: 0.16,
++              ease: 'power2.out',
++            }, '+=0.08')
++
++            // يتحرك أفقياً فوق الجميع
++            tl.to(lastEl, {
++              x: toX,
++              duration: 0.35,
++              ease: 'power3.inOut',
++            }, '<+=0.04')
++
++            // ينزل لمكانه الجديد
++            tl.to(lastEl, {
++              y: 0,
++              duration: 0.16,
++              ease: 'power2.in',
++            }, '<+=0.22')
++
++            // الحروف الباقية تتزحلق خطوة لليمين — كل واحدة بـ delay بسيط
++            currentPositions.forEach((pos, charIdx) => {
++              if (charIdx === lastCharIdx) return
++              tl.to(letterEls[charIdx], {
++                x: getX(pos + 1),
++                duration: 0.3,
++                ease: 'power2.inOut',
++              }, '<-=0.28')
++            })
++
++            // تحديث المواقع بعد الـ rotation
++            const newPositions = currentPositions.map((pos, charIdx) => {
++              if (charIdx === lastCharIdx) return 0
++              return pos + 1
++            })
++            currentPositions = newPositions
++          }
++
++          tl.to({}, { duration: 0.3 })
+ 
+           // ٣ — tagline
+           tl.to(taglineRef.current, {
+-            opacity: 1, y: 0,
+-            duration: 0.45,
++            opacity: 1,
++            y: 0,
++            duration: 0.4,
+             ease: 'power3.out',
+-          }, '-=0.2')
++          })
+ 
+-          // ٤ — توقف
+-          tl.to({}, { duration: 0.75 })
++          tl.to({}, { duration: 0.7 })
+ 
+-          // ٥ — fade out حروف
+-          tl.to([letters, taglineRef.current], {
+-            opacity: 0, y: -14,
+-            duration: 0.3,
++          // ٤ — fade out الحروف والـ tagline من المركز
++          tl.to([...letterEls, taglineRef.current], {
++            opacity: 0,
++            y: -16,
++            duration: 0.28,
+             ease: 'power2.in',
++            stagger: { each: 0.03, from: 'center' },
+           })
+ 
+-          // ٦ — بوابة المصعد تنفتح
++          // ٥ — بوابة المصعد تنفتح
+           tl.to(panelTopRef.current, {
+             y: '-100%',
+-            duration: 0.95,
++            duration: 0.92,
+             ease: 'power4.inOut',
+           }, '-=0.05')
+ 
+           tl.to(panelBotRef.current, {
+             y: '100%',
+-            duration: 0.95,
++            duration: 0.92,
+             ease: 'power4.inOut',
+           }, '<')
+ 
+-          // ٧ — إخفاء الـ wrapper نهائياً
+-          tl.to(wrapperRef.current, {
+-            pointerEvents: 'none',
+-            duration: 0,
+-            onComplete,
+-          })
++          tl.call(onComplete)
+         }
+ 
+-        // ─────────────────────────────────────────────
+-        // OPTION B: Text Fill + Curtain للأعلى
+-        // ─────────────────────────────────────────────
++        // ─────────────────────────────────────────────────────
++        // OPTION B — Text Fill + Curtain للأعلى
++        // ─────────────────────────────────────────────────────
+         if (ANIMATION_TYPE === 'fill') {
+           gsap.set(fillTextRef.current,  { width: '0%' })
+           gsap.set(progressRef.current,  { width: '0%' })
+@@ -107,42 +198,34 @@ export function IntroLoader({ onComplete }: Props) {
+ 
+           const tl = gsap.timeline()
+ 
+-          // ١ — progress bar + نص يمتلئ
+           tl.to([fillTextRef.current, progressRef.current], {
+             width: '100%',
+             duration: 1.7,
+             ease: 'power2.inOut',
+           })
+ 
+-          // ٢ — tagline
+           tl.to(taglineRef.current, {
+             opacity: 1, y: 0,
+             duration: 0.4,
+             ease: 'power2.out',
+           }, '-=0.6')
+ 
+-          // ٣ — توقف
+           tl.to({}, { duration: 0.4 })
+ 
+-          // ٤ — curtain للأعلى
+           tl.to(panelSingle.current, {
+             y: '-100%',
+             duration: 0.9,
+             ease: 'power4.inOut',
+           })
+ 
+-          tl.to(wrapperRef.current, {
+-            pointerEvents: 'none',
+-            duration: 0,
+-            onComplete,
+-          })
++          tl.call(onComplete)
+         }
+ 
+       }, wrapperRef)
+     }
+ 
+     run()
+-    return () => ctx?.revert()
++    return () => gsapCtx?.revert()
+   }, [onComplete])
+ 
+   return (
+@@ -152,12 +235,12 @@ export function IntroLoader({ onComplete }: Props) {
+         position: 'fixed',
+         inset: 0,
+         zIndex: 999,
+-        pointerEvents: 'all',
++        pointerEvents: 'none',
+       }}
+     >
+-      {/* ── OPTION A — بوابة مصعد (نصفين) ── */}
+       {ANIMATION_TYPE === 'typography' && (
+         <>
++          {/* النصف العلوي */}
+           <div
+             ref={panelTopRef}
+             style={{
+@@ -166,8 +249,11 @@ export function IntroLoader({ onComplete }: Props) {
+               height: '50%',
+               background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
+               zIndex: 2,
++              pointerEvents: 'all',
+             }}
+           />
++
++          {/* النصف السفلي */}
+           <div
+             ref={panelBotRef}
+             style={{
+@@ -176,54 +262,40 @@ export function IntroLoader({ onComplete }: Props) {
+               height: '50%',
+               background: 'linear-gradient(160deg, #FF8E53, #FF6B6B)',
+               zIndex: 2,
++              pointerEvents: 'all',
+             }}
+           />
+ 
+-          {/* الحروف */}
++          {/* stage — حاوية الحروف */}
+           <div
+-            ref={lettersRef}
++            ref={stageRef}
+             style={{
+               position: 'absolute',
+               inset: 0,
+               display: 'flex',
+               alignItems: 'center',
+               justifyContent: 'center',
+-              gap: '2px',
+               zIndex: 3,
++              pointerEvents: 'none',
+             }}
+-          >
+-            {'Salis'.split('').map((char, i) => (
+-              <span
+-                key={i}
+-                className="salis-letter"
+-                style={{
+-                  fontSize: 'clamp(64px, 12vw, 96px)',
+-                  fontWeight: 900,
+-                  color: '#fff',
+-                  letterSpacing: '-2px',
+-                  lineHeight: 1,
+-                  display: 'inline-block',
+-                }}
+-              >
+-                {char}
+-              </span>
+-            ))}
+-          </div>
++          />
+ 
+           {/* tagline */}
+           <p
+             ref={taglineRef}
+             style={{
+               position: 'absolute',
+-              bottom: 'calc(50% - 60px)',
++              top: '58%',
+               left: 0, right: 0,
+               textAlign: 'center',
+               zIndex: 3,
++              margin: 0,
+               fontSize: '12px',
+               fontWeight: 600,
+               letterSpacing: '0.18em',
+               color: 'rgba(255,255,255,0.65)',
+               textTransform: 'uppercase',
++              pointerEvents: 'none',
+             }}
+           >
+             تسوق ببساطة
+@@ -231,7 +303,6 @@ export function IntroLoader({ onComplete }: Props) {
+         </>
+       )}
+ 
+-      {/* ── OPTION B — curtain للأعلى ── */}
+       {ANIMATION_TYPE === 'fill' && (
+         <div
+           ref={panelSingle}
+@@ -245,11 +316,10 @@ export function IntroLoader({ onComplete }: Props) {
+             alignItems: 'center',
+             justifyContent: 'center',
+             gap: '20px',
++            pointerEvents: 'all',
+           }}
+         >
+-          {/* النص مع fill */}
+           <div style={{ position: 'relative' }}>
+-            {/* النص الشبح */}
+             <span style={{
+               fontSize: 'clamp(64px, 12vw, 96px)',
+               fontWeight: 900,
+@@ -260,7 +330,6 @@ export function IntroLoader({ onComplete }: Props) {
+             }}>
+               Salis
+             </span>
+-            {/* النص المملوء */}
+             <span
+               ref={fillTextRef}
+               style={{
+@@ -280,34 +349,25 @@ export function IntroLoader({ onComplete }: Props) {
+             </span>
+           </div>
+ 
+-          {/* Progress bar */}
+           <div style={{
+-            width: '100px',
+-            height: '2px',
++            width: '100px', height: '2px',
+             background: 'rgba(255,255,255,0.2)',
+-            borderRadius: '99px',
+-            overflow: 'hidden',
++            borderRadius: '99px', overflow: 'hidden',
+           }}>
+             <div
+               ref={progressRef}
+-              style={{
+-                height: '100%',
+-                background: '#fff',
+-                width: '0%',
+-                borderRadius: '99px',
+-              }}
++              style={{ height: '100%', background: '#fff', width: '0%', borderRadius: '99px' }}
+             />
+           </div>
+ 
+-          {/* tagline */}
+           <p
+             ref={taglineRef}
+             style={{
+-              fontSize: '12px',
+-              fontWeight: 600,
++              fontSize: '12px', fontWeight: 600,
+               letterSpacing: '0.18em',
+               color: 'rgba(255,255,255,0.65)',
+               textTransform: 'uppercase',
++              margin: 0,
+             }}
+           >
+             تسوق ببساطة
+-- 
+2.43.0
+

@@ -1,0 +1,298 @@
+'use client'
+
+import { useEffect, useRef } from 'react'
+
+interface Props {
+  onComplete: () => void
+}
+
+// ═══════════════════════════════════════════════════════════
+// لتبديل بين الأنيميشنين — غيّر هاد السطر فقط:
+//   'typography'  →  حروف تنبثق + pipe shuffle + بوابة مصعد
+//   'fill'        →  نص يمتلئ + curtain للأعلى
+// ═══════════════════════════════════════════════════════════
+const ANIMATION_TYPE: 'typography' | 'fill' = 'typography'
+
+const N      = 5
+const SPREAD = 72
+
+function getX(index: number) {
+  return (index - (N - 1) / 2) * SPREAD
+}
+
+export function IntroLoader({ onComplete }: Props) {
+  const panelTopRef = useRef<HTMLDivElement>(null)
+  const panelBotRef = useRef<HTMLDivElement>(null)
+  const panelSingle = useRef<HTMLDivElement>(null)
+  const stageRef    = useRef<HTMLDivElement>(null)
+  const fillTextRef = useRef<HTMLSpanElement>(null)
+  const progressRef = useRef<HTMLDivElement>(null)
+  const taglineRef  = useRef<HTMLParagraphElement>(null)
+  const wrapperRef  = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    let gsapCtx: any = null
+
+    async function run() {
+      const { gsap } = await import('gsap')
+
+      gsapCtx = gsap.context(() => {
+
+        if (ANIMATION_TYPE === 'typography') {
+          if (!stageRef.current) return
+
+          // ── بناء الحروف ──────────────────────────────────
+          // كل حرف له index ثابت في المصفوفة
+          // نتتبع أي حرف في أي موقع بـ currentSlots
+          // currentSlots[slot] = letterIndex
+          const CHARS = ['S', 'a', 'l', 'i', 's']
+          // نبدأ بـ silaS — الحروف معكوسة
+          // slot 0 → حرف 's' (index 4)
+          // slot 1 → حرف 'i' (index 3)
+          // slot 2 → حرف 'l' (index 2)
+          // slot 3 → حرف 'a' (index 1)
+          // slot 4 → حرف 'S' (index 0)
+          let currentSlots = [4, 3, 2, 1, 0]
+
+          const letterEls: HTMLSpanElement[] = []
+
+          CHARS.forEach((char) => {
+            const el = document.createElement('span')
+            el.textContent = char
+            el.style.cssText = `
+              position: absolute;
+              font-size: clamp(56px, 11vw, 88px);
+              font-weight: 900;
+              color: #fff;
+              line-height: 1;
+              display: inline-block;
+              will-change: transform;
+            `
+            stageRef.current!.appendChild(el)
+            letterEls.push(el)
+          })
+
+          // نضع كل حرف في موقعه الأولي حسب currentSlots
+          // currentSlots[slot] = letterIndex
+          // يعني letterIndex 4 ('s') في slot 0
+          letterEls.forEach((el, letterIdx) => {
+            const slot = currentSlots.indexOf(letterIdx)
+            gsap.set(el, {
+              x: getX(slot),
+              y: 60,
+              opacity: 0,
+              scaleY: 0,
+              transformOrigin: 'bottom center',
+            })
+          })
+
+          gsap.set(taglineRef.current, { opacity: 0, y: 8 })
+
+          const tl = gsap.timeline()
+
+          // ١ — ظهور من المركز بـ elastic
+          // نرتب ظهورهم حسب موقعهم (slot) من المركز
+          const appearOrder = [2, 1, 3, 0, 4] // من المركز للخارج
+          appearOrder.forEach((slot, staggerIdx) => {
+            const letterIdx = currentSlots[slot]
+            tl.to(letterEls[letterIdx], {
+              y: 0, opacity: 1, scaleY: 1,
+              duration: 0.65,
+              ease: 'elastic.out(1, 0.48)',
+            }, staggerIdx * 0.09)
+          })
+
+          tl.to({}, { duration: 0.3 })
+
+          // ٢ — Pipe Shuffle: 4 rotations حتى تصير Salis
+          // كل rotation: الحرف في slot الأخير (4) يطير لـ slot الأول (0)
+          // والباقي يتزحلقون slot + 1
+          for (let step = 0; step < 4; step++) {
+            // الحرف الموجود في آخر slot
+            const flyingLetterIdx = currentSlots[4]
+            const flyingEl = letterEls[flyingLetterIdx]
+
+            // يطير للأعلى
+            tl.to(flyingEl, {
+              y: -50,
+              duration: 0.15,
+              ease: 'power2.out',
+            }, '+=0.12')
+
+            // يتحرك أفقياً لـ slot 0
+            tl.to(flyingEl, {
+              x: getX(0),
+              duration: 0.32,
+              ease: 'power3.inOut',
+            }, '<+=0.03')
+
+            // ينزل لـ slot 0
+            tl.to(flyingEl, {
+              y: 0,
+              duration: 0.15,
+              ease: 'power2.in',
+            }, '<+=0.20')
+
+            // الباقي يتزحلقون يميناً — slot+1
+            for (let slot = 0; slot < 4; slot++) {
+              const letterIdx = currentSlots[slot]
+              tl.to(letterEls[letterIdx], {
+                x: getX(slot + 1),
+                duration: 0.3,
+                ease: 'power2.inOut',
+              }, '<-=0.3')
+            }
+
+            // تحديث currentSlots بعد الـ rotation
+            // الحرف اللي كان في slot 4 يروح slot 0
+            // الباقي يتزحلقون slot+1
+            const newSlots: number[] = new Array(5)
+            newSlots[0] = currentSlots[4]
+            for (let slot = 0; slot < 4; slot++) {
+              newSlots[slot + 1] = currentSlots[slot]
+            }
+            currentSlots = newSlots
+          }
+
+          tl.to({}, { duration: 0.35 })
+
+          // ٣ — tagline
+          tl.to(taglineRef.current, {
+            opacity: 1, y: 0,
+            duration: 0.4,
+            ease: 'power3.out',
+          })
+
+          tl.to({}, { duration: 0.7 })
+
+          // ٤ — fade out من المركز للخارج
+          const fadeOrder = [2, 1, 3, 0, 4]
+          fadeOrder.forEach((slot, i) => {
+            const letterIdx = currentSlots[slot]
+            tl.to(letterEls[letterIdx], {
+              opacity: 0, y: -16,
+              duration: 0.25,
+              ease: 'power2.in',
+            }, `+=${i === 0 ? 0 : 0.04}`)
+          })
+          tl.to(taglineRef.current, { opacity: 0, duration: 0.2 }, '<')
+
+          // ٥ — بوابة المصعد
+          tl.to(panelTopRef.current, {
+            y: '-100%',
+            duration: 0.92,
+            ease: 'power4.inOut',
+          }, '+=0.05')
+
+          tl.to(panelBotRef.current, {
+            y: '100%',
+            duration: 0.92,
+            ease: 'power4.inOut',
+          }, '<')
+
+          tl.call(onComplete)
+        }
+
+        // ── OPTION B ────────────────────────────────────────
+        if (ANIMATION_TYPE === 'fill') {
+          gsap.set(fillTextRef.current,  { width: '0%' })
+          gsap.set(progressRef.current,  { width: '0%' })
+          gsap.set(taglineRef.current,   { opacity: 0, y: 8 })
+
+          const tl = gsap.timeline()
+
+          tl.to([fillTextRef.current, progressRef.current], {
+            width: '100%', duration: 1.7, ease: 'power2.inOut',
+          })
+
+          tl.to(taglineRef.current, {
+            opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
+          }, '-=0.6')
+
+          tl.to({}, { duration: 0.4 })
+
+          tl.to(panelSingle.current, {
+            y: '-100%', duration: 0.9, ease: 'power4.inOut',
+          })
+
+          tl.call(onComplete)
+        }
+
+      }, wrapperRef)
+    }
+
+    run()
+    return () => gsapCtx?.revert()
+  }, [onComplete])
+
+  return (
+    <div ref={wrapperRef} style={{ position: 'fixed', inset: 0, zIndex: 999 }}>
+
+      {ANIMATION_TYPE === 'typography' && (
+        <>
+          <div ref={panelTopRef} style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
+            background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)', zIndex: 2,
+          }} />
+          <div ref={panelBotRef} style={{
+            position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
+            background: 'linear-gradient(160deg, #FF8E53, #FF6B6B)', zIndex: 2,
+          }} />
+          <div ref={stageRef} style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            zIndex: 3, pointerEvents: 'none',
+          }} />
+          <p ref={taglineRef} style={{
+            position: 'absolute', top: '57%', left: 0, right: 0,
+            textAlign: 'center', zIndex: 3, margin: 0,
+            fontSize: '12px', fontWeight: 600,
+            letterSpacing: '0.18em', color: 'rgba(255,255,255,0.65)',
+            textTransform: 'uppercase', pointerEvents: 'none',
+          }}>
+            تسوق ببساطة
+          </p>
+        </>
+      )}
+
+      {ANIMATION_TYPE === 'fill' && (
+        <div ref={panelSingle} style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)', zIndex: 2,
+          display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: '20px',
+        }}>
+          <div style={{ position: 'relative' }}>
+            <span style={{
+              fontSize: 'clamp(64px, 12vw, 96px)', fontWeight: 900,
+              color: 'rgba(255,255,255,0.2)', letterSpacing: '-3px',
+              lineHeight: 1, userSelect: 'none',
+            }}>Salis</span>
+            <span ref={fillTextRef} style={{
+              position: 'absolute', top: 0, left: 0,
+              fontSize: 'clamp(64px, 12vw, 96px)', fontWeight: 900,
+              color: '#fff', letterSpacing: '-3px', lineHeight: 1,
+              overflow: 'hidden', whiteSpace: 'nowrap', width: '0%',
+            }}>Salis</span>
+          </div>
+          <div style={{
+            width: '100px', height: '2px',
+            background: 'rgba(255,255,255,0.2)',
+            borderRadius: '99px', overflow: 'hidden',
+          }}>
+            <div ref={progressRef} style={{
+              height: '100%', background: '#fff',
+              width: '0%', borderRadius: '99px',
+            }} />
+          </div>
+          <p ref={taglineRef} style={{
+            fontSize: '12px', fontWeight: 600,
+            letterSpacing: '0.18em', color: 'rgba(255,255,255,0.65)',
+            textTransform: 'uppercase', margin: 0,
+          }}>تسوق ببساطة</p>
+        </div>
+      )}
+
+    </div>
+  )
+}
