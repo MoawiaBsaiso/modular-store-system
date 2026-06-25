@@ -7,17 +7,24 @@ interface Props {
 }
 
 // ═══════════════════════════════════════════════════════════
-// لتبديل بين الأنيميشنين — غيّر هاد السطر فقط:
-//   'typography'  →  حروف تنبثق + pipe shuffle + بوابة مصعد
+// لتبديل بين الأنيميشنين:
+//   'typography'  →  حروف pipe shuffle + بوابة مصعد
 //   'fill'        →  نص يمتلئ + curtain للأعلى
 // ═══════════════════════════════════════════════════════════
 const ANIMATION_TYPE: 'typography' | 'fill' = 'typography'
 
-const N      = 5
-const SPREAD = 72
+// CHARS[0]=S, [1]=a, [2]=l, [3]=i, [4]=s
+// currentSlots[slot] = charIndex
+// نبدأ بـ sSali → 4 rotations → Salis
+// sSali: slot0=s(4), slot1=S(0), slot2=a(1), slot3=l(2), slot4=i(3)
+const INITIAL_SLOTS = [4, 0, 1, 2, 3]
+const ROTATIONS     = 4
+const CHARS         = ['S', 'a', 'l', 'i', 's']
+const N             = 5
+const SPREAD        = 72
 
-function getX(index: number) {
-  return (index - (N - 1) / 2) * SPREAD
+function getX(slot: number) {
+  return (slot - (N - 1) / 2) * SPREAD
 }
 
 export function IntroLoader({ onComplete }: Props) {
@@ -42,18 +49,7 @@ export function IntroLoader({ onComplete }: Props) {
           if (!stageRef.current) return
 
           // ── بناء الحروف ──────────────────────────────────
-          // كل حرف له index ثابت في المصفوفة
-          // نتتبع أي حرف في أي موقع بـ currentSlots
-          // currentSlots[slot] = letterIndex
-          const CHARS = ['S', 'a', 'l', 'i', 's']
-          // نبدأ بـ silaS — الحروف معكوسة
-          // slot 0 → حرف 's' (index 4)
-          // slot 1 → حرف 'i' (index 3)
-          // slot 2 → حرف 'l' (index 2)
-          // slot 3 → حرف 'a' (index 1)
-          // slot 4 → حرف 'S' (index 0)
-          let currentSlots = [4, 3, 2, 1, 0]
-
+          // letterEls[charIndex] = الـ span لذلك الحرف
           const letterEls: HTMLSpanElement[] = []
 
           CHARS.forEach((char) => {
@@ -72,12 +68,13 @@ export function IntroLoader({ onComplete }: Props) {
             letterEls.push(el)
           })
 
-          // نضع كل حرف في موقعه الأولي حسب currentSlots
-          // currentSlots[slot] = letterIndex
-          // يعني letterIndex 4 ('s') في slot 0
-          letterEls.forEach((el, letterIdx) => {
-            const slot = currentSlots.indexOf(letterIdx)
-            gsap.set(el, {
+          // نتتبع currentSlots[slot] = charIndex
+          let currentSlots = [...INITIAL_SLOTS]
+
+          // نضع كل حرف في موقعه الأولي مخفياً
+          CHARS.forEach((_, charIdx) => {
+            const slot = currentSlots.indexOf(charIdx)
+            gsap.set(letterEls[charIdx], {
               x: getX(slot),
               y: 60,
               opacity: 0,
@@ -91,64 +88,60 @@ export function IntroLoader({ onComplete }: Props) {
           const tl = gsap.timeline()
 
           // ١ — ظهور من المركز بـ elastic
-          // نرتب ظهورهم حسب موقعهم (slot) من المركز
-          const appearOrder = [2, 1, 3, 0, 4] // من المركز للخارج
-          appearOrder.forEach((slot, staggerIdx) => {
-            const letterIdx = currentSlots[slot]
-            tl.to(letterEls[letterIdx], {
+          // نرتب الظهور من المركز للخارج: slots 2,1,3,0,4
+          const appearBySlot = [2, 1, 3, 0, 4]
+          appearBySlot.forEach((slot, i) => {
+            const charIdx = currentSlots[slot]
+            tl.to(letterEls[charIdx], {
               y: 0, opacity: 1, scaleY: 1,
               duration: 0.65,
               ease: 'elastic.out(1, 0.48)',
-            }, staggerIdx * 0.09)
+            }, i * 0.09)
           })
 
           tl.to({}, { duration: 0.3 })
 
-          // ٢ — Pipe Shuffle: 4 rotations حتى تصير Salis
-          // كل rotation: الحرف في slot الأخير (4) يطير لـ slot الأول (0)
-          // والباقي يتزحلقون slot + 1
-          for (let step = 0; step < 4; step++) {
-            // الحرف الموجود في آخر slot
-            const flyingLetterIdx = currentSlots[4]
-            const flyingEl = letterEls[flyingLetterIdx]
+          // ٢ — Pipe Shuffle: ROTATIONS مرات
+          for (let step = 0; step < ROTATIONS; step++) {
+            // الحرف في آخر slot يطير للأول
+            const flyingCharIdx = currentSlots[N - 1]
+            const flyingEl = letterEls[flyingCharIdx]
 
             // يطير للأعلى
             tl.to(flyingEl, {
-              y: -50,
-              duration: 0.15,
+              y: -52,
+              duration: 0.14,
               ease: 'power2.out',
-            }, '+=0.12')
+            }, '+=0.1')
 
             // يتحرك أفقياً لـ slot 0
             tl.to(flyingEl, {
               x: getX(0),
-              duration: 0.32,
+              duration: 0.3,
               ease: 'power3.inOut',
-            }, '<+=0.03')
+            }, '<+=0.02')
 
-            // ينزل لـ slot 0
+            // ينزل
             tl.to(flyingEl, {
               y: 0,
-              duration: 0.15,
+              duration: 0.14,
               ease: 'power2.in',
-            }, '<+=0.20')
+            }, '<+=0.18')
 
-            // الباقي يتزحلقون يميناً — slot+1
-            for (let slot = 0; slot < 4; slot++) {
-              const letterIdx = currentSlots[slot]
-              tl.to(letterEls[letterIdx], {
+            // الحروف في slots 0..N-2 تتزحلق +1
+            for (let slot = 0; slot < N - 1; slot++) {
+              const charIdx = currentSlots[slot]
+              tl.to(letterEls[charIdx], {
                 x: getX(slot + 1),
-                duration: 0.3,
+                duration: 0.28,
                 ease: 'power2.inOut',
-              }, '<-=0.3')
+              }, '<-=0.28')
             }
 
-            // تحديث currentSlots بعد الـ rotation
-            // الحرف اللي كان في slot 4 يروح slot 0
-            // الباقي يتزحلقون slot+1
-            const newSlots: number[] = new Array(5)
-            newSlots[0] = currentSlots[4]
-            for (let slot = 0; slot < 4; slot++) {
+            // تحديث currentSlots
+            const newSlots = new Array(N)
+            newSlots[0] = currentSlots[N - 1]
+            for (let slot = 0; slot < N - 1; slot++) {
               newSlots[slot + 1] = currentSlots[slot]
             }
             currentSlots = newSlots
@@ -165,15 +158,15 @@ export function IntroLoader({ onComplete }: Props) {
 
           tl.to({}, { duration: 0.7 })
 
-          // ٤ — fade out من المركز للخارج
-          const fadeOrder = [2, 1, 3, 0, 4]
-          fadeOrder.forEach((slot, i) => {
-            const letterIdx = currentSlots[slot]
-            tl.to(letterEls[letterIdx], {
+          // ٤ — fade out من المركز
+          const fadeBySlot = [2, 1, 3, 0, 4]
+          fadeBySlot.forEach((slot, i) => {
+            const charIdx = currentSlots[slot]
+            tl.to(letterEls[charIdx], {
               opacity: 0, y: -16,
-              duration: 0.25,
+              duration: 0.22,
               ease: 'power2.in',
-            }, `+=${i === 0 ? 0 : 0.04}`)
+            }, i === 0 ? '+=0' : '<+=0.04')
           })
           tl.to(taglineRef.current, { opacity: 0, duration: 0.2 }, '<')
 
@@ -204,17 +197,13 @@ export function IntroLoader({ onComplete }: Props) {
           tl.to([fillTextRef.current, progressRef.current], {
             width: '100%', duration: 1.7, ease: 'power2.inOut',
           })
-
           tl.to(taglineRef.current, {
             opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
           }, '-=0.6')
-
           tl.to({}, { duration: 0.4 })
-
           tl.to(panelSingle.current, {
             y: '-100%', duration: 0.9, ease: 'power4.inOut',
           })
-
           tl.call(onComplete)
         }
 

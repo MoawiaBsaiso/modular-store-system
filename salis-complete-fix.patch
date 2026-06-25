@@ -1,0 +1,1119 @@
+diff --git a/apps/storefront/src/app/page.tsx b/apps/storefront/src/app/page.tsx
+index c9e31ca..3c79117 100644
+--- a/apps/storefront/src/app/page.tsx
++++ b/apps/storefront/src/app/page.tsx
+@@ -1,56 +1,86 @@
+ 'use client'
+ 
+-import { useState, useEffect } from 'react'
+-import { Navbar } from '@/components/layout/Navbar'
++import { useState, useEffect, useCallback } from 'react'
++import { IntroLoader } from '@/components/layout/IntroLoader'
+ import { HeroSection } from '@/components/layout/HeroSection'
++import { Navbar } from '@/components/layout/Navbar'
+ import { ProductGrid } from '@/features/products/components/ProductGrid'
+ import { CartDrawer } from '@/features/cart/components/CartDrawer'
+ import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+ import { useLenis } from '@/lib/useLenis'
+ 
+ export default function StorePage() {
+-  const [isCartOpen, setIsCartOpen] = useState(false)
++  const [introComplete, setIntroComplete]   = useState(false)
++  const [isCartOpen, setIsCartOpen]         = useState(false)
+   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false)
+-  const [isDark, setIsDark] = useState(false)
++  const [isDark, setIsDark]                 = useState(false)
+ 
+-  // تفعيل Lenis smooth scrolling على مستوى الصفحة
+   useLenis()
+ 
++  // تطبيق الثيم على الـ html element
+   useEffect(() => {
+     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+   }, [isDark])
+ 
+-  const handleCheckout = () => {
+-    setIsCartOpen(false)
+-    setIsCheckoutOpen(true)
+-  }
++  const handleIntroComplete = useCallback(() => {
++    setIntroComplete(true)
++  }, [])
++
++  const handleThemeToggle = useCallback(() => {
++    setIsDark(prev => !prev)
++  }, [])
++
++  const handleCartOpen = useCallback(() => {
++    setIsCartOpen(true)
++  }, [])
+ 
+   return (
+     <>
+-      <Navbar
+-        onCartOpen={() => setIsCartOpen(true)}
+-        onThemeToggle={() => setIsDark(d => !d)}
+-        isDark={isDark}
+-      />
++      {/* Intro Loader */}
++      <IntroLoader onComplete={handleIntroComplete} />
+ 
+-      {/* Hero مع GSAP entrance animations */}
+-      <HeroSection />
++      {/* Navbar — دايماً موجود في الـ DOM، مخفي قبل الـ intro */}
++      <div style={{
++        position: 'fixed',
++        top: 0, left: 0, right: 0,
++        zIndex: 40,
++        opacity: introComplete ? 1 : 0,
++        pointerEvents: introComplete ? 'auto' : 'none',
++        transition: 'opacity 0.3s ease',
++      }}>
++        <Navbar
++          onCartOpen={handleCartOpen}
++          onThemeToggle={handleThemeToggle}
++          isDark={isDark}
++        />
++      </div>
+ 
+-      {/* Products مع GSAP ScrollTrigger */}
+-      <main style={{
+-        maxWidth: '1200px',
+-        margin: '0 auto',
+-        padding: '0 24px 100px',
++      {/* المحتوى — مخفي قبل الـ intro */}
++      <div style={{
++        visibility: introComplete ? 'visible' : 'hidden',
++        paddingTop: '64px',
+       }}>
+-        <ProductGrid />
+-      </main>
++        <HeroSection ready={introComplete} />
++        <main style={{
++          maxWidth: '1200px',
++          margin: '0 auto',
++          padding: '0 24px 100px',
++        }}>
++          <ProductGrid />
++        </main>
++      </div>
+ 
++      {/* Cart Drawer — دايماً خارج الـ visibility wrapper */}
+       <CartDrawer
+         isOpen={isCartOpen}
+         onClose={() => setIsCartOpen(false)}
+-        onCheckout={handleCheckout}
++        onCheckout={() => {
++          setIsCartOpen(false)
++          setIsCheckoutOpen(true)
++        }}
+       />
+ 
++      {/* Checkout Modal */}
+       <CheckoutModal
+         isOpen={isCheckoutOpen}
+         onClose={() => setIsCheckoutOpen(false)}
+diff --git a/apps/storefront/src/components/layout/HeroSection.tsx b/apps/storefront/src/components/layout/HeroSection.tsx
+index a400021..b308878 100644
+--- a/apps/storefront/src/components/layout/HeroSection.tsx
++++ b/apps/storefront/src/components/layout/HeroSection.tsx
+@@ -2,119 +2,105 @@
+ 
+ import { useEffect, useRef } from 'react'
+ 
+-// HeroSection — أنيميشن دخول بـ GSAP
+-// كل عنصر يدخل بـ stagger من الأسفل للأعلى
+-export function HeroSection() {
+-  const containerRef = useRef<HTMLElement>(null)
+-  const badgeRef = useRef<HTMLParagraphElement>(null)
+-  const headingRef = useRef<HTMLHeadingElement>(null)
++interface Props {
++  ready: boolean
++}
++
++export function HeroSection({ ready }: Props) {
++  const badgeRef    = useRef<HTMLParagraphElement>(null)
++  const line1Ref    = useRef<HTMLDivElement>(null)
++  const line2Ref    = useRef<HTMLDivElement>(null)
+   const subtitleRef = useRef<HTMLParagraphElement>(null)
++  const sectionRef  = useRef<HTMLElement>(null)
++
++  // نخفي كل شيء بـ CSS قبل ما GSAP يشتغل
++  useEffect(() => {
++    if (!sectionRef.current) return
++    // نخفي فوراً بدون انتظار GSAP
++    const els = [badgeRef.current, line1Ref.current, line2Ref.current, subtitleRef.current]
++    els.forEach(el => {
++      if (el) {
++        el.style.opacity = '0'
++        el.style.transform = 'translateY(28px)'
++      }
++    })
++  }, [])
+ 
+   useEffect(() => {
+-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+-      let ctx: any = null
++    if (!ready) return
++    let ctx: any = null
+ 
+     async function animate() {
+       const { gsap } = await import('gsap')
+ 
+-      // نحدد السياق عشان نقدر نـ cleanup بسهولة
+       ctx = gsap.context(() => {
+-        const tl = gsap.timeline({
+-          defaults: {
+-            duration: 0.8,
+-            ease: 'power3.out',
+-          },
+-        })
+-
+-        // نبدأ من الحالة المخفية
+-        gsap.set([badgeRef.current, headingRef.current, subtitleRef.current], {
+-          opacity: 0,
+-          y: 30,
+-        })
+-
+-        // Stagger — كل عنصر يتأخر 0.15 ثانية عن اللي قبله
+-        tl.to(badgeRef.current, { opacity: 1, y: 0 })
+-          .to(headingRef.current, { opacity: 1, y: 0 }, '-=0.5')
+-          .to(subtitleRef.current, { opacity: 1, y: 0 }, '-=0.5')
+-      }, containerRef)
++        const tl = gsap.timeline({ defaults: { ease: 'power4.out' } })
++
++        tl.to(badgeRef.current, {
++          opacity: 1, y: 0, duration: 0.55,
++        }, 0.1)
++
++        tl.to(line1Ref.current, {
++          opacity: 1, y: 0, duration: 0.6,
++        }, 0.28)
++
++        tl.to(line2Ref.current, {
++          opacity: 1, y: 0, duration: 0.6,
++        }, 0.42)
++
++        tl.to(subtitleRef.current, {
++          opacity: 1, y: 0, duration: 0.5,
++        }, 0.56)
++
++      }, sectionRef)
+     }
+ 
+     animate()
+-
+     return () => ctx?.revert()
+-  }, [])
++  }, [ready])
+ 
+   return (
+     <section
+-      ref={containerRef}
++      ref={sectionRef}
+       style={{
+         maxWidth: '1200px',
+         margin: '0 auto',
+-        padding: '80px 24px 56px',
++        padding: '88px 24px 56px',
+         textAlign: 'center',
+       }}
+     >
+-      {/* Badge */}
+-      <p
+-        ref={badgeRef}
+-        style={{
+-          display: 'inline-flex',
+-          alignItems: 'center',
+-          gap: '6px',
+-          fontSize: '12px',
+-          fontWeight: 600,
+-          color: 'var(--coral-start)',
+-          letterSpacing: '0.1em',
+-          textTransform: 'uppercase',
+-          margin: '0 0 20px',
+-          background: '#FF6B6B12',
+-          padding: '6px 14px',
+-          borderRadius: '99px',
+-          border: '1px solid #FF6B6B22',
+-        }}
+-      >
++      <p ref={badgeRef} style={{
++        display: 'inline-flex', alignItems: 'center', gap: '6px',
++        fontSize: '12px', fontWeight: 600, color: 'var(--coral-start)',
++        letterSpacing: '0.1em', textTransform: 'uppercase',
++        margin: '0 0 20px', background: '#FF6B6B12',
++        padding: '6px 16px', borderRadius: '99px',
++        border: '1px solid #FF6B6B28',
++      }}>
+         ✦ تسوق ببساطة
+       </p>
+ 
+-      {/* Heading */}
+-      <h1
+-        ref={headingRef}
+-        style={{
+-          fontSize: 'clamp(2.2rem, 5.5vw, 3.6rem)',
+-          fontWeight: 800,
+-          color: 'var(--text-primary)',
+-          lineHeight: 1.15,
+-          letterSpacing: '-0.04em',
+-          margin: '0 0 20px',
+-        }}
+-      >
+-        كل ما تحتاجه،{' '}
+-        <span
+-          style={{
++      <h1 style={{
++        fontSize: 'clamp(2.2rem, 5.5vw, 3.6rem)', fontWeight: 800,
++        color: 'var(--text-primary)', lineHeight: 1.18,
++        letterSpacing: '-0.04em', margin: '0 0 20px',
++      }}>
++        <div ref={line1Ref}>كل ما تحتاجه،</div>
++        <div ref={line2Ref}>
++          <span style={{
+             background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
+             WebkitBackgroundClip: 'text',
+             WebkitTextFillColor: 'transparent',
+             backgroundClip: 'text',
+-          }}
+-        >
+-          في مكان واحد
+-        </span>
++          }}>في مكان واحد</span>
++        </div>
+       </h1>
+ 
+-      {/* Subtitle */}
+-      <p
+-        ref={subtitleRef}
+-        style={{
+-          fontSize: '17px',
+-          color: 'var(--text-secondary)',
+-          maxWidth: '460px',
+-          margin: '0 auto',
+-          lineHeight: 1.75,
+-        }}
+-      >
+-        تصفح منتجاتنا، أضف ما يعجبك للسلة،
+-        <br />
+-        واستلم طلبك بسهولة.
++      <p ref={subtitleRef} style={{
++        fontSize: '17px', color: 'var(--text-secondary)',
++        maxWidth: '460px', margin: '0 auto', lineHeight: 1.75,
++      }}>
++        تصفح منتجاتنا، أضف ما يعجبك للسلة،<br />واستلم طلبك بسهولة.
+       </p>
+     </section>
+   )
+diff --git a/apps/storefront/src/components/layout/IntroLoader.tsx b/apps/storefront/src/components/layout/IntroLoader.tsx
+new file mode 100644
+index 0000000..c49f767
+--- /dev/null
++++ b/apps/storefront/src/components/layout/IntroLoader.tsx
+@@ -0,0 +1,287 @@
++'use client'
++
++import { useEffect, useRef } from 'react'
++
++interface Props {
++  onComplete: () => void
++}
++
++// ═══════════════════════════════════════════════════════════
++// لتبديل بين الأنيميشنين:
++//   'typography'  →  حروف pipe shuffle + بوابة مصعد
++//   'fill'        →  نص يمتلئ + curtain للأعلى
++// ═══════════════════════════════════════════════════════════
++const ANIMATION_TYPE: 'typography' | 'fill' = 'typography'
++
++// CHARS[0]=S, [1]=a, [2]=l, [3]=i, [4]=s
++// currentSlots[slot] = charIndex
++// نبدأ بـ sSali → 4 rotations → Salis
++// sSali: slot0=s(4), slot1=S(0), slot2=a(1), slot3=l(2), slot4=i(3)
++const INITIAL_SLOTS = [4, 0, 1, 2, 3]
++const ROTATIONS     = 4
++const CHARS         = ['S', 'a', 'l', 'i', 's']
++const N             = 5
++const SPREAD        = 72
++
++function getX(slot: number) {
++  return (slot - (N - 1) / 2) * SPREAD
++}
++
++export function IntroLoader({ onComplete }: Props) {
++  const panelTopRef = useRef<HTMLDivElement>(null)
++  const panelBotRef = useRef<HTMLDivElement>(null)
++  const panelSingle = useRef<HTMLDivElement>(null)
++  const stageRef    = useRef<HTMLDivElement>(null)
++  const fillTextRef = useRef<HTMLSpanElement>(null)
++  const progressRef = useRef<HTMLDivElement>(null)
++  const taglineRef  = useRef<HTMLParagraphElement>(null)
++  const wrapperRef  = useRef<HTMLDivElement>(null)
++
++  useEffect(() => {
++    let gsapCtx: any = null
++
++    async function run() {
++      const { gsap } = await import('gsap')
++
++      gsapCtx = gsap.context(() => {
++
++        if (ANIMATION_TYPE === 'typography') {
++          if (!stageRef.current) return
++
++          // ── بناء الحروف ──────────────────────────────────
++          // letterEls[charIndex] = الـ span لذلك الحرف
++          const letterEls: HTMLSpanElement[] = []
++
++          CHARS.forEach((char) => {
++            const el = document.createElement('span')
++            el.textContent = char
++            el.style.cssText = `
++              position: absolute;
++              font-size: clamp(56px, 11vw, 88px);
++              font-weight: 900;
++              color: #fff;
++              line-height: 1;
++              display: inline-block;
++              will-change: transform;
++            `
++            stageRef.current!.appendChild(el)
++            letterEls.push(el)
++          })
++
++          // نتتبع currentSlots[slot] = charIndex
++          let currentSlots = [...INITIAL_SLOTS]
++
++          // نضع كل حرف في موقعه الأولي مخفياً
++          CHARS.forEach((_, charIdx) => {
++            const slot = currentSlots.indexOf(charIdx)
++            gsap.set(letterEls[charIdx], {
++              x: getX(slot),
++              y: 60,
++              opacity: 0,
++              scaleY: 0,
++              transformOrigin: 'bottom center',
++            })
++          })
++
++          gsap.set(taglineRef.current, { opacity: 0, y: 8 })
++
++          const tl = gsap.timeline()
++
++          // ١ — ظهور من المركز بـ elastic
++          // نرتب الظهور من المركز للخارج: slots 2,1,3,0,4
++          const appearBySlot = [2, 1, 3, 0, 4]
++          appearBySlot.forEach((slot, i) => {
++            const charIdx = currentSlots[slot]
++            tl.to(letterEls[charIdx], {
++              y: 0, opacity: 1, scaleY: 1,
++              duration: 0.65,
++              ease: 'elastic.out(1, 0.48)',
++            }, i * 0.09)
++          })
++
++          tl.to({}, { duration: 0.3 })
++
++          // ٢ — Pipe Shuffle: ROTATIONS مرات
++          for (let step = 0; step < ROTATIONS; step++) {
++            // الحرف في آخر slot يطير للأول
++            const flyingCharIdx = currentSlots[N - 1]
++            const flyingEl = letterEls[flyingCharIdx]
++
++            // يطير للأعلى
++            tl.to(flyingEl, {
++              y: -52,
++              duration: 0.14,
++              ease: 'power2.out',
++            }, '+=0.1')
++
++            // يتحرك أفقياً لـ slot 0
++            tl.to(flyingEl, {
++              x: getX(0),
++              duration: 0.3,
++              ease: 'power3.inOut',
++            }, '<+=0.02')
++
++            // ينزل
++            tl.to(flyingEl, {
++              y: 0,
++              duration: 0.14,
++              ease: 'power2.in',
++            }, '<+=0.18')
++
++            // الحروف في slots 0..N-2 تتزحلق +1
++            for (let slot = 0; slot < N - 1; slot++) {
++              const charIdx = currentSlots[slot]
++              tl.to(letterEls[charIdx], {
++                x: getX(slot + 1),
++                duration: 0.28,
++                ease: 'power2.inOut',
++              }, '<-=0.28')
++            }
++
++            // تحديث currentSlots
++            const newSlots = new Array(N)
++            newSlots[0] = currentSlots[N - 1]
++            for (let slot = 0; slot < N - 1; slot++) {
++              newSlots[slot + 1] = currentSlots[slot]
++            }
++            currentSlots = newSlots
++          }
++
++          tl.to({}, { duration: 0.35 })
++
++          // ٣ — tagline
++          tl.to(taglineRef.current, {
++            opacity: 1, y: 0,
++            duration: 0.4,
++            ease: 'power3.out',
++          })
++
++          tl.to({}, { duration: 0.7 })
++
++          // ٤ — fade out من المركز
++          const fadeBySlot = [2, 1, 3, 0, 4]
++          fadeBySlot.forEach((slot, i) => {
++            const charIdx = currentSlots[slot]
++            tl.to(letterEls[charIdx], {
++              opacity: 0, y: -16,
++              duration: 0.22,
++              ease: 'power2.in',
++            }, i === 0 ? '+=0' : '<+=0.04')
++          })
++          tl.to(taglineRef.current, { opacity: 0, duration: 0.2 }, '<')
++
++          // ٥ — بوابة المصعد
++          tl.to(panelTopRef.current, {
++            y: '-100%',
++            duration: 0.92,
++            ease: 'power4.inOut',
++          }, '+=0.05')
++
++          tl.to(panelBotRef.current, {
++            y: '100%',
++            duration: 0.92,
++            ease: 'power4.inOut',
++          }, '<')
++
++          tl.call(onComplete)
++        }
++
++        // ── OPTION B ────────────────────────────────────────
++        if (ANIMATION_TYPE === 'fill') {
++          gsap.set(fillTextRef.current,  { width: '0%' })
++          gsap.set(progressRef.current,  { width: '0%' })
++          gsap.set(taglineRef.current,   { opacity: 0, y: 8 })
++
++          const tl = gsap.timeline()
++
++          tl.to([fillTextRef.current, progressRef.current], {
++            width: '100%', duration: 1.7, ease: 'power2.inOut',
++          })
++          tl.to(taglineRef.current, {
++            opacity: 1, y: 0, duration: 0.4, ease: 'power2.out',
++          }, '-=0.6')
++          tl.to({}, { duration: 0.4 })
++          tl.to(panelSingle.current, {
++            y: '-100%', duration: 0.9, ease: 'power4.inOut',
++          })
++          tl.call(onComplete)
++        }
++
++      }, wrapperRef)
++    }
++
++    run()
++    return () => gsapCtx?.revert()
++  }, [onComplete])
++
++  return (
++    <div ref={wrapperRef} style={{ position: 'fixed', inset: 0, zIndex: 999 }}>
++
++      {ANIMATION_TYPE === 'typography' && (
++        <>
++          <div ref={panelTopRef} style={{
++            position: 'absolute', top: 0, left: 0, right: 0, height: '50%',
++            background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)', zIndex: 2,
++          }} />
++          <div ref={panelBotRef} style={{
++            position: 'absolute', bottom: 0, left: 0, right: 0, height: '50%',
++            background: 'linear-gradient(160deg, #FF8E53, #FF6B6B)', zIndex: 2,
++          }} />
++          <div ref={stageRef} style={{
++            position: 'absolute', inset: 0,
++            display: 'flex', alignItems: 'center', justifyContent: 'center',
++            zIndex: 3, pointerEvents: 'none',
++          }} />
++          <p ref={taglineRef} style={{
++            position: 'absolute', top: '57%', left: 0, right: 0,
++            textAlign: 'center', zIndex: 3, margin: 0,
++            fontSize: '12px', fontWeight: 600,
++            letterSpacing: '0.18em', color: 'rgba(255,255,255,0.65)',
++            textTransform: 'uppercase', pointerEvents: 'none',
++          }}>
++            تسوق ببساطة
++          </p>
++        </>
++      )}
++
++      {ANIMATION_TYPE === 'fill' && (
++        <div ref={panelSingle} style={{
++          position: 'absolute', inset: 0,
++          background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)', zIndex: 2,
++          display: 'flex', flexDirection: 'column',
++          alignItems: 'center', justifyContent: 'center', gap: '20px',
++        }}>
++          <div style={{ position: 'relative' }}>
++            <span style={{
++              fontSize: 'clamp(64px, 12vw, 96px)', fontWeight: 900,
++              color: 'rgba(255,255,255,0.2)', letterSpacing: '-3px',
++              lineHeight: 1, userSelect: 'none',
++            }}>Salis</span>
++            <span ref={fillTextRef} style={{
++              position: 'absolute', top: 0, left: 0,
++              fontSize: 'clamp(64px, 12vw, 96px)', fontWeight: 900,
++              color: '#fff', letterSpacing: '-3px', lineHeight: 1,
++              overflow: 'hidden', whiteSpace: 'nowrap', width: '0%',
++            }}>Salis</span>
++          </div>
++          <div style={{
++            width: '100px', height: '2px',
++            background: 'rgba(255,255,255,0.2)',
++            borderRadius: '99px', overflow: 'hidden',
++          }}>
++            <div ref={progressRef} style={{
++              height: '100%', background: '#fff',
++              width: '0%', borderRadius: '99px',
++            }} />
++          </div>
++          <p ref={taglineRef} style={{
++            fontSize: '12px', fontWeight: 600,
++            letterSpacing: '0.18em', color: 'rgba(255,255,255,0.65)',
++            textTransform: 'uppercase', margin: 0,
++          }}>تسوق ببساطة</p>
++        </div>
++      )}
++
++    </div>
++  )
++}
+diff --git a/apps/storefront/src/components/layout/Navbar.tsx b/apps/storefront/src/components/layout/Navbar.tsx
+index 2da9c36..26c8ddc 100644
+--- a/apps/storefront/src/components/layout/Navbar.tsx
++++ b/apps/storefront/src/components/layout/Navbar.tsx
+@@ -13,17 +13,22 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+ 
+   return (
+     <nav style={{
+-      position: 'sticky', top: 0, zIndex: 40,
+-      background: 'rgba(var(--bg-base-rgb, 255,251,247), 0.85)',
+-      backdropFilter: 'blur(12px)',
++      width: '100%',
++      background: 'rgba(255,251,247,0.88)',
++      backdropFilter: 'blur(14px)',
++      WebkitBackdropFilter: 'blur(14px)',
+       borderBottom: '1px solid var(--border)',
+     }}>
+       <div style={{
+-        maxWidth: '1200px', margin: '0 auto',
++        maxWidth: '1200px',
++        margin: '0 auto',
+         padding: '0 24px',
+         height: '64px',
+-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'space-between',
+       }}>
++
+         {/* Logo */}
+         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+           <div style={{
+@@ -32,7 +37,7 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+             borderRadius: '8px',
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+           }}>
+-            <span style={{ color: '#fff', fontWeight: 700, fontSize: '16px' }}>S</span>
++            <span style={{ color: '#fff', fontWeight: 800, fontSize: '16px' }}>S</span>
+           </div>
+           <span style={{
+             fontSize: '18px', fontWeight: 700,
+@@ -45,19 +50,25 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+ 
+         {/* Actions */}
+         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+-          {/* Theme toggle */}
++
++          {/* Dark mode toggle */}
+           <button
+             onClick={onThemeToggle}
+-            aria-label="تبديل المظهر"
++            aria-label={isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'}
+             style={{
+               width: '38px', height: '38px',
+               display: 'flex', alignItems: 'center', justifyContent: 'center',
+               background: 'var(--bg-surface)',
+               border: '1px solid var(--border)',
+               borderRadius: 'var(--radius-sm)',
+-              cursor: 'pointer', fontSize: '17px',
+-              transition: 'background var(--duration-fast)',
++              cursor: 'pointer',
++              fontSize: '17px',
++              lineHeight: 1,
++              transition: 'background 150ms',
++              // لا يوجد color هنا لأن الأيقونة emoji
+             }}
++            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-muted)')}
++            onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+           >
+             {isDark ? '☀️' : '🌙'}
+           </button>
+@@ -65,7 +76,7 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+           {/* Cart button */}
+           <button
+             onClick={onCartOpen}
+-            aria-label={`السلة — ${cartCount} منتج`}
++            aria-label={`فتح السلة — ${cartCount} منتج`}
+             style={{
+               display: 'flex', alignItems: 'center', gap: '8px',
+               padding: '8px 16px',
+@@ -75,25 +86,28 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+               cursor: 'pointer',
+               fontSize: '14px', fontWeight: 600,
+               color: 'var(--text-primary)',
+-              transition: 'background var(--duration-fast)',
++              transition: 'background 150ms',
+             }}
+             onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-muted)')}
+             onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+           >
+-            🛒
++            <span>🛒</span>
+             <span>السلة</span>
+             {cartCount > 0 && (
+               <span style={{
+                 background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
+                 color: '#fff',
+                 fontSize: '11px', fontWeight: 700,
+-                padding: '2px 7px', borderRadius: '99px',
+-                minWidth: '20px', textAlign: 'center',
++                padding: '2px 8px',
++                borderRadius: '99px',
++                minWidth: '20px',
++                textAlign: 'center',
+               }}>
+                 {cartCount}
+               </span>
+             )}
+           </button>
++
+         </div>
+       </div>
+     </nav>
+diff --git a/apps/storefront/src/features/products/components/ProductCard.tsx b/apps/storefront/src/features/products/components/ProductCard.tsx
+index f09afd3..9c8b992 100644
+--- a/apps/storefront/src/features/products/components/ProductCard.tsx
++++ b/apps/storefront/src/features/products/components/ProductCard.tsx
+@@ -1,19 +1,72 @@
+ 'use client'
+ 
+-import { useRef } from 'react'
++import { useRef, useState, useCallback } from 'react'
+ import type { Product } from '@/types'
+ import { useCart } from '@/features/cart/hooks/useCart'
+ 
+ interface Props { product: Product }
+ 
++// حالات زر السلة
++type BtnState = 'idle' | 'adding' | 'added'
++
+ export function ProductCard({ product }: Props) {
+   const { addToCart } = useCart()
+-  const cardRef = useRef<HTMLDivElement>(null)
++  const [btnState, setBtnState] = useState<BtnState>('idle')
++  const [isHovered, setIsHovered] = useState(false)
++  const btnRef = useRef<HTMLButtonElement>(null)
+   const inStock = product.stock > 0
+ 
++  // Micro-interaction: زر يتقلص → ✓ → يرجع
++  const handleAddToCart = useCallback(async () => {
++    if (!inStock || btnState !== 'idle') return
++
++    setBtnState('adding')
++
++    // استيراد GSAP ديناميكياً
++    const { gsap } = await import('gsap')
++    const btn = btnRef.current
++    if (!btn) return
++
++    const tl = gsap.timeline()
++
++    // يتقلص للمنتصف
++    tl.to(btn, {
++      scaleX: 0.88,
++      scaleY: 0.92,
++      duration: 0.12,
++      ease: 'power2.in',
++    })
++
++    // bounce للأعلى
++    tl.to(btn, {
++      scaleX: 1,
++      scaleY: 1,
++      duration: 0.35,
++      ease: 'elastic.out(1, 0.5)',
++      onComplete: () => {
++        addToCart(product)
++        setBtnState('added')
++        // يرجع لـ idle بعد ثانيتين
++        setTimeout(() => setBtnState('idle'), 1800)
++      },
++    })
++  }, [inStock, btnState, product, addToCart])
++
++  const btnLabel =
++    !inStock ? 'نفذت الكمية'
++    : btnState === 'adding' ? '...'
++    : btnState === 'added' ? '✓ تمت الإضافة'
++    : 'أضف للسلة'
++
++  const btnBg =
++    !inStock ? 'var(--border)'
++    : btnState === 'added' ? 'var(--success)'
++    : 'linear-gradient(135deg, var(--coral-start), var(--coral-end))'
++
+   return (
+     <div
+-      ref={cardRef}
++      onMouseEnter={() => setIsHovered(true)}
++      onMouseLeave={() => setIsHovered(false)}
+       style={{
+         background: 'var(--bg-base)',
+         border: '1px solid var(--border)',
+@@ -21,17 +74,10 @@ export function ProductCard({ product }: Props) {
+         overflow: 'hidden',
+         display: 'flex',
+         flexDirection: 'column',
+-        transition: 'transform var(--duration-base) var(--ease-out), box-shadow var(--duration-base) var(--ease-out)',
+-      }}
+-      onMouseEnter={e => {
+-        const el = e.currentTarget
+-        el.style.transform = 'translateY(-4px)'
+-        el.style.boxShadow = '0 12px 40px rgba(26,26,46,0.1)'
+-      }}
+-      onMouseLeave={e => {
+-        const el = e.currentTarget
+-        el.style.transform = 'translateY(0)'
+-        el.style.boxShadow = 'none'
++        position: 'relative',
++        transform: isHovered ? 'translateY(-6px)' : 'translateY(0)',
++        boxShadow: isHovered ? '0 16px 48px rgba(26,26,46,0.12)' : 'none',
++        transition: 'transform 0.3s cubic-bezier(0.16,1,0.3,1), box-shadow 0.3s cubic-bezier(0.16,1,0.3,1)',
+       }}
+     >
+       {/* صورة المنتج */}
+@@ -46,23 +92,50 @@ export function ProductCard({ product }: Props) {
+             src={product.images[0]}
+             alt={product.title}
+             style={{
+-              width: '100%',
+-              height: '100%',
+-              objectFit: 'cover',
+-              transition: 'transform var(--duration-slow) var(--ease-out)',
++              width: '100%', height: '100%', objectFit: 'cover',
++              transform: isHovered ? 'scale(1.08)' : 'scale(1)',
++              transition: 'transform 0.5s cubic-bezier(0.16,1,0.3,1)',
+             }}
+-            onMouseEnter={e => (e.currentTarget.style.transform = 'scale(1.06)')}
+-            onMouseLeave={e => (e.currentTarget.style.transform = 'scale(1)')}
+           />
+         ) : (
+           <div style={{
+             width: '100%', height: '100%',
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+             color: 'var(--text-muted)', fontSize: '2.5rem',
++          }}>🛍️</div>
++        )}
++
++        {/* Hover Overlay — CTA يصعد من الأسفل */}
++        <div style={{
++          position: 'absolute', inset: 0,
++          background: 'rgba(26,26,46,0.38)',
++          backdropFilter: isHovered ? 'blur(2px)' : 'blur(0px)',
++          opacity: isHovered ? 1 : 0,
++          transition: 'opacity 0.3s ease, backdrop-filter 0.3s ease',
++          display: 'flex', alignItems: 'flex-end',
++          padding: '12px',
++        }}>
++          <div style={{
++            width: '100%',
++            transform: isHovered ? 'translateY(0)' : 'translateY(16px)',
++            opacity: isHovered ? 1 : 0,
++            transition: 'transform 0.35s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease',
++            transitionDelay: isHovered ? '0.05s' : '0s',
+           }}>
+-            🛍️
++            <span style={{
++              display: 'block',
++              background: '#fff',
++              color: '#1A1A2E',
++              textAlign: 'center',
++              padding: '10px',
++              borderRadius: 'var(--radius-md)',
++              fontSize: '13px',
++              fontWeight: 700,
++            }}>
++              عرض سريع
++            </span>
+           </div>
+-        )}
++        </div>
+ 
+         {/* شارة نفذت الكمية */}
+         {!inStock && (
+@@ -72,12 +145,9 @@ export function ProductCard({ product }: Props) {
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+           }}>
+             <span style={{
+-              background: 'var(--danger)',
+-              color: '#fff',
+-              fontSize: '12px',
+-              fontWeight: 600,
+-              padding: '4px 12px',
+-              borderRadius: '99px',
++              background: 'var(--danger)', color: '#fff',
++              fontSize: '12px', fontWeight: 600,
++              padding: '4px 12px', borderRadius: '99px',
+             }}>نفذت الكمية</span>
+           </div>
+         )}
+@@ -87,11 +157,8 @@ export function ProductCard({ product }: Props) {
+           <div style={{
+             position: 'absolute', top: 10, right: 10,
+             background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
+-            color: '#fff',
+-            fontSize: '11px',
+-            fontWeight: 600,
+-            padding: '3px 10px',
+-            borderRadius: '99px',
++            color: '#fff', fontSize: '11px', fontWeight: 600,
++            padding: '3px 10px', borderRadius: '99px',
+           }}>
+             خصم {Math.round((1 - product.price / product.compareAtPrice) * 100)}٪
+           </div>
+@@ -99,41 +166,40 @@ export function ProductCard({ product }: Props) {
+       </div>
+ 
+       {/* معلومات المنتج */}
+-      <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column', gap: '8px' }}>
+-        <div>
+-          <p style={{
+-            fontSize: '11px',
+-            color: 'var(--text-muted)',
+-            textTransform: 'uppercase',
+-            letterSpacing: '0.06em',
+-            margin: '0 0 4px',
+-          }}>
+-            {product.category}
+-          </p>
+-          <h3 style={{
+-            fontSize: '15px',
+-            fontWeight: 600,
+-            color: 'var(--text-primary)',
+-            margin: 0,
+-            lineHeight: 1.4,
+-            display: '-webkit-box',
+-            WebkitLineClamp: 2,
+-            WebkitBoxOrient: 'vertical',
+-            overflow: 'hidden',
+-          }}>
+-            {product.title}
+-          </h3>
+-        </div>
++      <div style={{
++        padding: '16px', flex: 1,
++        display: 'flex', flexDirection: 'column', gap: '8px',
++      }}>
++        <p style={{
++          fontSize: '11px', color: 'var(--text-muted)',
++          textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0,
++        }}>
++          {product.category}
++        </p>
++
++        <h3 style={{
++          fontSize: '15px', fontWeight: 600,
++          color: 'var(--text-primary)', margin: 0,
++          lineHeight: 1.4,
++          display: '-webkit-box',
++          WebkitLineClamp: 2,
++          WebkitBoxOrient: 'vertical',
++          overflow: 'hidden',
++        }}>
++          {product.title}
++        </h3>
+ 
+         {/* السعر */}
+-        <div style={{ display: 'flex', alignItems: 'baseline', gap: '8px', marginTop: 'auto' }}>
++        <div style={{
++          display: 'flex', alignItems: 'baseline',
++          gap: '8px', marginTop: 'auto',
++        }}>
+           <span style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)' }}>
+             ₪{product.price.toFixed(2)}
+           </span>
+           {product.compareAtPrice && product.compareAtPrice > product.price && (
+             <span style={{
+-              fontSize: '13px',
+-              color: 'var(--text-muted)',
++              fontSize: '13px', color: 'var(--text-muted)',
+               textDecoration: 'line-through',
+             }}>
+               ₪{product.compareAtPrice.toFixed(2)}
+@@ -141,30 +207,23 @@ export function ProductCard({ product }: Props) {
+           )}
+         </div>
+ 
+-        {/* زر الإضافة */}
++        {/* زر الإضافة مع Micro-interaction */}
+         <button
+-          onClick={() => inStock && addToCart(product)}
+-          disabled={!inStock}
++          ref={btnRef}
++          onClick={handleAddToCart}
++          disabled={!inStock || btnState === 'adding'}
+           style={{
+-            marginTop: '8px',
+-            width: '100%',
+-            padding: '12px',
+-            borderRadius: 'var(--radius-md)',
+-            border: 'none',
+-            cursor: inStock ? 'pointer' : 'not-allowed',
+-            fontSize: '14px',
+-            fontWeight: 600,
+-            color: '#fff',
+-            background: inStock
+-              ? 'linear-gradient(135deg, var(--coral-start), var(--coral-end))'
+-              : 'var(--border)',
+-            transition: 'opacity var(--duration-fast)',
+-            opacity: inStock ? 1 : 0.5,
++            marginTop: '8px', width: '100%', padding: '12px',
++            borderRadius: 'var(--radius-md)', border: 'none',
++            cursor: inStock && btnState === 'idle' ? 'pointer' : 'default',
++            fontSize: '14px', fontWeight: 600, color: '#fff',
++            background: btnBg,
++            transition: 'background 0.3s ease, opacity 0.15s',
++            opacity: !inStock ? 0.5 : 1,
++            transformOrigin: 'center',
+           }}
+-          onMouseEnter={e => { if (inStock) e.currentTarget.style.opacity = '0.88' }}
+-          onMouseLeave={e => { if (inStock) e.currentTarget.style.opacity = '1' }}
+         >
+-          {inStock ? 'أضف للسلة' : 'نفذت الكمية'}
++          {btnLabel}
+         </button>
+       </div>
+     </div>
+diff --git a/apps/storefront/src/features/products/components/ProductGrid.tsx b/apps/storefront/src/features/products/components/ProductGrid.tsx
+index f2f03d8..db34641 100644
+--- a/apps/storefront/src/features/products/components/ProductGrid.tsx
++++ b/apps/storefront/src/features/products/components/ProductGrid.tsx
+@@ -8,11 +8,9 @@ export function ProductGrid() {
+   const { products, isLoading, isEmpty } = useProducts()
+   const gridRef = useRef<HTMLDivElement>(null)
+ 
+-  // ScrollTrigger — كل card يظهر عند الـ scroll
+   useEffect(() => {
+     if (!products.length) return
+-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+-      let ctx: any = null
++    let ctx: any = null
+ 
+     async function animate() {
+       const { gsap } = await import('gsap')
+@@ -23,17 +21,20 @@ export function ProductGrid() {
+         const cards = gridRef.current?.querySelectorAll('.product-card')
+         if (!cards?.length) return
+ 
+-        gsap.set(cards, { opacity: 0, y: 40 })
++        // نخفي من البداية
++        gsap.set(cards, { opacity: 0, y: 44, scale: 0.96 })
+ 
+         gsap.to(cards, {
+           opacity: 1,
+           y: 0,
+-          duration: 0.6,
++          scale: 1,
++          duration: 0.65,
+           ease: 'power3.out',
+-          stagger: 0.08,          // كل card يتأخر 80ms عن السابق
++          stagger: { each: 0.08, from: 'start' },
+           scrollTrigger: {
+             trigger: gridRef.current,
+-            start: 'top 85%',     // يبدأ لما الـ grid يوصل 85% من الشاشة
++            start: 'top 88%',
++            once: true, // يشتغل مرة واحدة فقط
+           },
+         })
+       }, gridRef)
+@@ -47,8 +48,7 @@ export function ProductGrid() {
+ 
+   if (isEmpty) return (
+     <div style={{
+-      textAlign: 'center',
+-      padding: '80px 24px',
++      textAlign: 'center', padding: '80px 24px',
+       border: '1px dashed var(--border)',
+       borderRadius: 'var(--radius-xl)',
+     }}>
+@@ -60,16 +60,12 @@ export function ProductGrid() {
+   )
+ 
+   return (
+-    <div
+-      ref={gridRef}
+-      style={{
+-        display: 'grid',
+-        gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
+-        gap: '20px',
+-      }}
+-    >
++    <div ref={gridRef} style={{
++      display: 'grid',
++      gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
++      gap: '20px',
++    }}>
+       {products.map(product => (
+-        // className="product-card" عشان GSAP يلاقيها بالـ selector
+         <div key={product._id} className="product-card">
+           <ProductCard product={product} />
+         </div>
+@@ -87,10 +83,8 @@ function ProductGridSkeleton() {
+     }}>
+       {Array.from({ length: 8 }).map((_, i) => (
+         <div key={i} style={{
+-          background: 'var(--bg-surface)',
+-          border: '1px solid var(--border)',
+-          borderRadius: 'var(--radius-lg)',
+-          overflow: 'hidden',
++          background: 'var(--bg-surface)', border: '1px solid var(--border)',
++          borderRadius: 'var(--radius-lg)', overflow: 'hidden',
+           animation: 'salis-pulse 1.5s ease-in-out infinite',
+           animationDelay: `${i * 0.08}s`,
+         }}>
+@@ -103,12 +97,7 @@ function ProductGridSkeleton() {
+           </div>
+         </div>
+       ))}
+-      <style>{`
+-        @keyframes salis-pulse {
+-          0%, 100% { opacity: 1 }
+-          50% { opacity: 0.45 }
+-        }
+-      `}</style>
++      <style>{`@keyframes salis-pulse{0%,100%{opacity:1}50%{opacity:.45}}`}</style>
+     </div>
+   )
+ }

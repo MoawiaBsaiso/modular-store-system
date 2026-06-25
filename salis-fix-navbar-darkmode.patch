@@ -1,0 +1,223 @@
+From 7bc4be0f58bf1f2dd87ad8732fc81f547063c315 Mon Sep 17 00:00:00 2001
+From: Salis Dev <dev@salis.app>
+Date: Thu, 25 Jun 2026 11:47:35 +0000
+Subject: [PATCH] fix(storefront): dark mode and cart button not working
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+- page.tsx: Navbar always in DOM (opacity:0 before intro, not conditional mount)
+  conditional {introComplete && <Navbar>} was causing remount and losing state
+- Navbar: remove position:sticky — parent div already handles fixed positioning
+- page.tsx: use useCallback for all handlers to prevent unnecessary rerenders
+- Navbar: add WebkitBackdropFilter for Safari support
+---
+ apps/storefront/src/app/page.tsx              | 49 ++++++++++++-------
+ .../src/components/layout/Navbar.tsx          | 44 +++++++++++------
+ 2 files changed, 59 insertions(+), 34 deletions(-)
+
+diff --git a/apps/storefront/src/app/page.tsx b/apps/storefront/src/app/page.tsx
+index 8c4a630..3c79117 100644
+--- a/apps/storefront/src/app/page.tsx
++++ b/apps/storefront/src/app/page.tsx
+@@ -17,6 +17,7 @@ export default function StorePage() {
+ 
+   useLenis()
+ 
++  // تطبيق الثيم على الـ html element
+   useEffect(() => {
+     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+   }, [isDark])
+@@ -25,32 +26,41 @@ export default function StorePage() {
+     setIntroComplete(true)
+   }, [])
+ 
++  const handleThemeToggle = useCallback(() => {
++    setIsDark(prev => !prev)
++  }, [])
++
++  const handleCartOpen = useCallback(() => {
++    setIsCartOpen(true)
++  }, [])
++
+   return (
+     <>
+-      {/* Intro — يغطي كل شيء حتى ينتهي */}
++      {/* Intro Loader */}
+       <IntroLoader onComplete={handleIntroComplete} />
+ 
+-      {/* Navbar — fixed، خارج الـ content div عشان ما يتأثر */}
+-      {introComplete && (
+-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 40 }}>
+-          <Navbar
+-            onCartOpen={() => setIsCartOpen(true)}
+-            onThemeToggle={() => setIsDark(d => !d)}
+-            isDark={isDark}
+-          />
+-        </div>
+-      )}
++      {/* Navbar — دايماً موجود في الـ DOM، مخفي قبل الـ intro */}
++      <div style={{
++        position: 'fixed',
++        top: 0, left: 0, right: 0,
++        zIndex: 40,
++        opacity: introComplete ? 1 : 0,
++        pointerEvents: introComplete ? 'auto' : 'none',
++        transition: 'opacity 0.3s ease',
++      }}>
++        <Navbar
++          onCartOpen={handleCartOpen}
++          onThemeToggle={handleThemeToggle}
++          isDark={isDark}
++        />
++      </div>
+ 
+-      {/* المحتوى الرئيسي — مخفي بصرياً حتى ينتهي الـ intro */}
++      {/* المحتوى — مخفي قبل الـ intro */}
+       <div style={{
+         visibility: introComplete ? 'visible' : 'hidden',
+-        // نستخدم visibility بدل pointerEvents عشان يخفي بصرياً بالكامل
+-        // بدون ما يأثر على الـ CartDrawer والـ CheckoutModal اللي هم خارجه
++        paddingTop: '64px',
+       }}>
+-        <div style={{ paddingTop: introComplete ? '64px' : 0 }}>
+-          <HeroSection ready={introComplete} />
+-        </div>
+-
++        <HeroSection ready={introComplete} />
+         <main style={{
+           maxWidth: '1200px',
+           margin: '0 auto',
+@@ -60,7 +70,7 @@ export default function StorePage() {
+         </main>
+       </div>
+ 
+-      {/* Cart و Checkout خارج الـ visibility div — دايماً تعمل */}
++      {/* Cart Drawer — دايماً خارج الـ visibility wrapper */}
+       <CartDrawer
+         isOpen={isCartOpen}
+         onClose={() => setIsCartOpen(false)}
+@@ -70,6 +80,7 @@ export default function StorePage() {
+         }}
+       />
+ 
++      {/* Checkout Modal */}
+       <CheckoutModal
+         isOpen={isCheckoutOpen}
+         onClose={() => setIsCheckoutOpen(false)}
+diff --git a/apps/storefront/src/components/layout/Navbar.tsx b/apps/storefront/src/components/layout/Navbar.tsx
+index 2da9c36..26c8ddc 100644
+--- a/apps/storefront/src/components/layout/Navbar.tsx
++++ b/apps/storefront/src/components/layout/Navbar.tsx
+@@ -13,17 +13,22 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+ 
+   return (
+     <nav style={{
+-      position: 'sticky', top: 0, zIndex: 40,
+-      background: 'rgba(var(--bg-base-rgb, 255,251,247), 0.85)',
+-      backdropFilter: 'blur(12px)',
++      width: '100%',
++      background: 'rgba(255,251,247,0.88)',
++      backdropFilter: 'blur(14px)',
++      WebkitBackdropFilter: 'blur(14px)',
+       borderBottom: '1px solid var(--border)',
+     }}>
+       <div style={{
+-        maxWidth: '1200px', margin: '0 auto',
++        maxWidth: '1200px',
++        margin: '0 auto',
+         padding: '0 24px',
+         height: '64px',
+-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
++        display: 'flex',
++        alignItems: 'center',
++        justifyContent: 'space-between',
+       }}>
++
+         {/* Logo */}
+         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+           <div style={{
+@@ -32,7 +37,7 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+             borderRadius: '8px',
+             display: 'flex', alignItems: 'center', justifyContent: 'center',
+           }}>
+-            <span style={{ color: '#fff', fontWeight: 700, fontSize: '16px' }}>S</span>
++            <span style={{ color: '#fff', fontWeight: 800, fontSize: '16px' }}>S</span>
+           </div>
+           <span style={{
+             fontSize: '18px', fontWeight: 700,
+@@ -45,19 +50,25 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+ 
+         {/* Actions */}
+         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+-          {/* Theme toggle */}
++
++          {/* Dark mode toggle */}
+           <button
+             onClick={onThemeToggle}
+-            aria-label="تبديل المظهر"
++            aria-label={isDark ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن'}
+             style={{
+               width: '38px', height: '38px',
+               display: 'flex', alignItems: 'center', justifyContent: 'center',
+               background: 'var(--bg-surface)',
+               border: '1px solid var(--border)',
+               borderRadius: 'var(--radius-sm)',
+-              cursor: 'pointer', fontSize: '17px',
+-              transition: 'background var(--duration-fast)',
++              cursor: 'pointer',
++              fontSize: '17px',
++              lineHeight: 1,
++              transition: 'background 150ms',
++              // لا يوجد color هنا لأن الأيقونة emoji
+             }}
++            onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-muted)')}
++            onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+           >
+             {isDark ? '☀️' : '🌙'}
+           </button>
+@@ -65,7 +76,7 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+           {/* Cart button */}
+           <button
+             onClick={onCartOpen}
+-            aria-label={`السلة — ${cartCount} منتج`}
++            aria-label={`فتح السلة — ${cartCount} منتج`}
+             style={{
+               display: 'flex', alignItems: 'center', gap: '8px',
+               padding: '8px 16px',
+@@ -75,25 +86,28 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
+               cursor: 'pointer',
+               fontSize: '14px', fontWeight: 600,
+               color: 'var(--text-primary)',
+-              transition: 'background var(--duration-fast)',
++              transition: 'background 150ms',
+             }}
+             onMouseEnter={e => (e.currentTarget.style.background = 'var(--bg-muted)')}
+             onMouseLeave={e => (e.currentTarget.style.background = 'var(--bg-surface)')}
+           >
+-            🛒
++            <span>🛒</span>
+             <span>السلة</span>
+             {cartCount > 0 && (
+               <span style={{
+                 background: 'linear-gradient(135deg, var(--coral-start), var(--coral-end))',
+                 color: '#fff',
+                 fontSize: '11px', fontWeight: 700,
+-                padding: '2px 7px', borderRadius: '99px',
+-                minWidth: '20px', textAlign: 'center',
++                padding: '2px 8px',
++                borderRadius: '99px',
++                minWidth: '20px',
++                textAlign: 'center',
+               }}>
+                 {cartCount}
+               </span>
+             )}
+           </button>
++
+         </div>
+       </div>
+     </nav>
+-- 
+2.43.0
+

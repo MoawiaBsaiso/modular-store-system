@@ -17,6 +17,7 @@ export default function StorePage() {
 
   useLenis()
 
+  // تطبيق الثيم على الـ html element
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
   }, [isDark])
@@ -25,34 +26,41 @@ export default function StorePage() {
     setIntroComplete(true)
   }, [])
 
+  const handleThemeToggle = useCallback(() => {
+    setIsDark(prev => !prev)
+  }, [])
+
+  const handleCartOpen = useCallback(() => {
+    setIsCartOpen(true)
+  }, [])
+
   return (
     <>
-      {/* الـ Intro يُعرض دائماً أولاً */}
+      {/* Intro Loader */}
       <IntroLoader onComplete={handleIntroComplete} />
 
-      {/* كل المحتوى مخفي حتى ينتهي الـ intro */}
+      {/* Navbar — دايماً موجود في الـ DOM، مخفي قبل الـ intro */}
       <div style={{
+        position: 'fixed',
+        top: 0, left: 0, right: 0,
+        zIndex: 40,
         opacity: introComplete ? 1 : 0,
-        // لا نستخدم visibility:hidden عشان لا يأثر على الـ layout
-        transition: 'none',
         pointerEvents: introComplete ? 'auto' : 'none',
+        transition: 'opacity 0.3s ease',
       }}>
-        {/* Navbar */}
-        <div style={{
-          position: 'fixed', top: 0, left: 0, right: 0,
-          zIndex: 40,
-        }}>
-          <Navbar
-            onCartOpen={() => setIsCartOpen(true)}
-            onThemeToggle={() => setIsDark(d => !d)}
-            isDark={isDark}
-          />
-        </div>
+        <Navbar
+          onCartOpen={handleCartOpen}
+          onThemeToggle={handleThemeToggle}
+          isDark={isDark}
+        />
+      </div>
 
-        {/* Hero — يبدأ أنيميشنه بعد انتهاء الـ intro */}
+      {/* المحتوى — مخفي قبل الـ intro */}
+      <div style={{
+        visibility: introComplete ? 'visible' : 'hidden',
+        paddingTop: '64px',
+      }}>
         <HeroSection ready={introComplete} />
-
-        {/* Products */}
         <main style={{
           maxWidth: '1200px',
           margin: '0 auto',
@@ -62,6 +70,7 @@ export default function StorePage() {
         </main>
       </div>
 
+      {/* Cart Drawer — دايماً خارج الـ visibility wrapper */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -71,6 +80,7 @@ export default function StorePage() {
         }}
       />
 
+      {/* Checkout Modal */}
       <CheckoutModal
         isOpen={isCheckoutOpen}
         onClose={() => setIsCheckoutOpen(false)}
