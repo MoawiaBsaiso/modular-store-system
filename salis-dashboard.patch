@@ -1,0 +1,1029 @@
+From bf6ff1d3b5f1ec6be6423d64bc7499e788a64d4d Mon Sep 17 00:00:00 2001
+From: Salis Dev <dev@salis.app>
+Date: Sun, 12 Jul 2026 16:25:45 +0000
+Subject: [PATCH] feat(dashboard): full redesign with Salis identity
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Architecture:
+- Extract useProducts hook — encapsulates Convex products queries/mutations
+- Extract useOrders hook — encapsulates orders + computed stats
+- New types/index.ts — Product, Order, ProductFormData with full type safety
+- Remove all 'any' usage — strict TypeScript throughout
+
+UI:
+- Replace all Tailwind classes with Salis CSS variables
+- Login page with Salis coral gradient
+- Stats cards: total orders, pending, shipped, revenue
+- Products table with Salis tokens
+- Orders table with STATUS_CONFIG object (data-driven UI)
+- ProductForm: proper validation without alert(), success state
+- LoadingSpinner and EmptyState helper components
+
+Design System:
+- index.css: full Salis token set matching storefront
+- Dark mode via [data-theme=dark] — same system as storefront
+---
+ apps/dashboard/src/App.tsx                    | 486 +++++++++++-------
+ apps/dashboard/src/components/ProductForm.tsx | 234 +++++++++
+ apps/dashboard/src/hooks/useOrders.ts         |  48 ++
+ apps/dashboard/src/hooks/useProducts.ts       |  32 ++
+ apps/dashboard/src/index.css                  |  58 ++-
+ apps/dashboard/src/types/index.ts             |  47 ++
+ 6 files changed, 716 insertions(+), 189 deletions(-)
+ create mode 100644 apps/dashboard/src/components/ProductForm.tsx
+ create mode 100644 apps/dashboard/src/hooks/useOrders.ts
+ create mode 100644 apps/dashboard/src/hooks/useProducts.ts
+ create mode 100644 apps/dashboard/src/types/index.ts
+
+diff --git a/apps/dashboard/src/App.tsx b/apps/dashboard/src/App.tsx
+index 73f214a..f3ffa1a 100644
+--- a/apps/dashboard/src/App.tsx
++++ b/apps/dashboard/src/App.tsx
+@@ -1,133 +1,193 @@
+-import { useQuery, useMutation } from "convex/react";
+-import { api } from "../../../convex/_generated/api"; 
+-import { Authenticated, Unauthenticated } from "convex/react";
+-import { SignInButton, UserButton } from "@clerk/clerk-react";
+-import ProductForm from "./ProductForm";
+-import { Button, ThemeToggle } from "@modular/ui";
++import { Authenticated, Unauthenticated } from 'convex/react'
++import { SignInButton, UserButton } from '@clerk/clerk-react'
++import { ThemeToggle } from '@modular/ui'
++import { ProductForm } from './components/ProductForm'
++import { useProducts } from './hooks/useProducts'
++import { useOrders } from './hooks/useOrders'
++import type { Order, Product } from './types'
+ 
+-interface ConvexProduct {
+-  _id: string;
+-  _creationTime: number;
+-  title: string;
+-  description: string;
+-  price: number;
+-  category: string;
+-  stock: number;
+-  sku: string;
+-  images: string[];
+-}
+-
+-interface ConvexOrder {
+-  _id: string;
+-  _creationTime: number;
+-  customerName: string;
+-  customerPhone: string;
+-  totalPrice: number;
+-  status: string;
+-  items: {
+-    productId: string;
+-    title: string;
+-    quantity: number;
+-    price: number;
+-  }[];
++// ─── Status Config ─────────────────────────────────────────
++// بدل ما نكتب if/else في كل مكان — نعرّف object mapping
++// هاد مثال على Data-driven UI — البيانات تتحكم بالشكل
++const STATUS_CONFIG: Record<string, { label: string; bg: string; color: string }> = {
++  pending:    { label: 'قيد المعالجة', bg: '#FEF9C3', color: '#854D0E' },
++  processing: { label: 'قيد التجهيز',  bg: '#E0F2FE', color: '#075985' },
++  shipped:    { label: 'تم الشحن',     bg: '#DCFCE7', color: '#166534' },
++  delivered:  { label: 'تم التسليم',   bg: '#F0FDF4', color: '#14532D' },
++  cancelled:  { label: 'ملغي',         bg: '#FEE2E2', color: '#991B1B' },
+ }
+ 
++// ─── App ───────────────────────────────────────────────────
+ export default function App() {
+-  const products = useQuery(api.products.get);
+-  const orders = useQuery(api.orders.getAlldetails);
+-  const createProduct = useMutation(api.products.create);
+-  const updateOrderStatus = useMutation(api.orders.updateStatus);
+-
+-  const handleAddProduct = async (productData: any) => {
+-    await createProduct(productData);
+-  };
+-
+-  const handleStatusChange = async (orderId: any, newStatus: string) => {
+-    try {
+-      await updateOrderStatus({ orderId, status: newStatus });
+-    } catch (error) {
+-      console.error("خطأ أثناء تحديث حالة الطلب:", error);
+-    }
+-  };
++  // نستخدم الـ hooks اللي بنينا بدل ما نكتب useQuery/useMutation مباشرة
++  // هيك الـ App.tsx يبقى نظيف ومش فيه منطق Convex
++  const { products, isLoading: productsLoading, createProduct } = useProducts()
++  const { orders, isLoading: ordersLoading, updateOrderStatus, stats } = useOrders()
+ 
+   return (
+-  // 🌌 الخلفية الأساسية أصبحت Slate ناعم ومريح جداً للعين أثناء الليل
+-  <div className="min-h-screen bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-50 transition-colors duration-300 font-sans" dir="rtl">
+-    
+-    {/* 🔒 1. الحالة الأولى: إذا كان المستخدم غير مسجل الدخول */}
+-    <Unauthenticated>
+-      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-b from-slate-900 to-indigo-950 text-white p-4">
+-        <div className="max-w-md w-full bg-white/5 backdrop-blur-md p-8 rounded-2xl border border-white/10 shadow-2xl text-center">
+-          <span className="text-5xl">🔐</span>
+-          <h1 className="text-2xl font-black tracking-tight mt-4">بوابة المشرفين المركزية</h1>
+-          <p className="text-sm text-indigo-200 mt-2 leading-relaxed">
+-            هذه اللوحة محجوبة ومحمية بالكامل. يرجى تسجيل الدخول بصفتك مديراً للنظام للوصول إلى الجرد والمبيعات.
+-          </p>
+-          <div className="mt-8">
++    <div style={{
++      minHeight: '100vh',
++      background: 'var(--salis-bg-base)',
++      color: 'var(--salis-text-primary)',
++      fontFamily: 'system-ui, sans-serif',
++      transition: 'background 0.25s ease, color 0.25s ease',
++    }} dir="rtl">
++
++      {/* ── غير مسجل ── */}
++      <Unauthenticated>
++        <div style={{
++          minHeight: '100vh',
++          display: 'flex',
++          alignItems: 'center',
++          justifyContent: 'center',
++          background: 'linear-gradient(135deg, #1A1A2E, #16213E)',
++        }}>
++          <div style={{
++            background: 'rgba(255,255,255,0.05)',
++            border: '1px solid rgba(255,255,255,0.1)',
++            borderRadius: '20px',
++            padding: '40px',
++            textAlign: 'center',
++            maxWidth: '380px',
++            width: '100%',
++          }}>
++            <div style={{ fontSize: '3rem', marginBottom: '16px' }}>🔐</div>
++            <h1 style={{ color: '#fff', fontSize: '20px', fontWeight: 700, margin: '0 0 8px' }}>
++              لوحة تحكم Salis
++            </h1>
++            <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '13px', margin: '0 0 28px', lineHeight: 1.6 }}>
++              هذه اللوحة محمية. يرجى تسجيل الدخول للمتابعة.
++            </p>
+             <SignInButton mode="redirect">
+-              <Button className="w-full" size="lg">
+-                🔑 تسجيل الدخول الآمن
+-              </Button>
++              <button style={{
++                width: '100%',
++                padding: '12px',
++                background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
++                color: '#fff',
++                border: 'none',
++                borderRadius: '10px',
++                fontSize: '14px',
++                fontWeight: 700,
++                cursor: 'pointer',
++              }}>
++                تسجيل الدخول
++              </button>
+             </SignInButton>
+           </div>
+         </div>
+-      </div>
+-    </Unauthenticated>
++      </Unauthenticated>
++
++      {/* ── مسجل ── */}
++      <Authenticated>
++        <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '0 24px 60px' }}>
+ 
+-    {/* ✅ 2. الحالة الثانية: المشرف الموثق */}
+-    <Authenticated>
+-      <div className="py-12 px-4 sm:px-6 lg:px-8">
+-        <div className="max-w-7xl mx-auto space-y-12">
+-          
+-          {/* هيدر اللوحة اللطيف */}
+-          <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-800 pb-6">
++          {/* Header */}
++          <header style={{
++            padding: '20px 0',
++            borderBottom: '1px solid var(--salis-border)',
++            marginBottom: '32px',
++            display: 'flex',
++            alignItems: 'center',
++            justifyContent: 'space-between',
++          }}>
+             <div>
+-              <h1 className="text-3xl font-extrabold text-slate-950 dark:text-slate-100 tracking-tight">لوحة تحكم النظام الموديولاري</h1>
+-              <p className="mt-2 text-sm text-slate-650 dark:text-slate-400">إدارة المستودع المركزي، مراقبة المبيعات، وتحديث الحالات حياً.</p>
++              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '4px' }}>
++                <div style={{
++                  width: '28px', height: '28px',
++                  background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
++                  borderRadius: '7px',
++                  display: 'flex', alignItems: 'center', justifyContent: 'center',
++                }}>
++                  <span style={{ color: '#fff', fontWeight: 800, fontSize: '14px' }}>S</span>
++                </div>
++                <span style={{ fontSize: '18px', fontWeight: 700, color: 'var(--salis-text-primary)' }}>
++                  Salis Dashboard
++                </span>
++              </div>
++              <p style={{ fontSize: '12px', color: 'var(--salis-text-muted)', margin: 0 }}>
++                إدارة المنتجات والطلبات حياً
++              </p>
+             </div>
+-            
+-            {/* صندوق المشرف العلوي بألوان متناغمة */}
+-            <div className="flex items-center gap-3 bg-white dark:bg-slate-900 p-2 px-4 rounded-xl border border-slate-100 dark:border-slate-800 shadow-xs">
+-              <ThemeToggle />
+-              <span className="text-xs font-bold text-slate-500 dark:text-slate-400">المدير الحالي</span>
++            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
++              <ThemeToggle size="sm" />
+               <UserButton afterSignOutUrl="/" />
+             </div>
++          </header>
++
++          {/* Stats */}
++          <div style={{
++            display: 'grid',
++            gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))',
++            gap: '12px',
++            marginBottom: '32px',
++          }}>
++            <StatCard label="إجمالي الطلبات" value={stats.total} icon="📦" />
++            <StatCard label="قيد المعالجة" value={stats.pending} icon="⏳" />
++            <StatCard label="تم الشحن" value={stats.shipped} icon="🚚" />
++            <StatCard label="إجمالي الإيراد" value={`₪${stats.revenue.toFixed(0)}`} icon="💰" />
+           </div>
+ 
+-          {/* قسم الإدخال والجرد */}
+-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+-            <div className="lg:col-span-1">
+-              <ProductForm onSubmit={handleAddProduct} />
+-            </div>
++          {/* Main Grid */}
++          <div style={{
++            display: 'grid',
++            gridTemplateColumns: '1fr 2fr',
++            gap: '24px',
++            marginBottom: '32px',
++            alignItems: 'start',
++          }}>
++            {/* ProductForm */}
++            <ProductForm onSubmit={createProduct} />
+ 
+-            {/* كارت جرد المنتجات بستايل الـ Glassmorphism المظلم الفخم */}
+-            <div className="lg:col-span-2 bg-white dark:bg-slate-900/60 dark:backdrop-blur-md p-6 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-xs">
+-              <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-4">📦 جرد المنتجات الحالي بالمخازن</h2>
+-              {products === undefined ? (
+-                <div className="text-center py-6 animate-spin rounded-full h-6 w-6 border-b-2 border-indigo-600 mx-auto"></div>
++            {/* Products Table */}
++            <div style={{
++              background: 'var(--salis-bg-base)',
++              border: '1px solid var(--salis-border)',
++              borderRadius: '16px',
++              overflow: 'hidden',
++            }}>
++              <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--salis-border)' }}>
++                <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--salis-text-primary)', margin: 0 }}>
++                  المنتجات ({products.length})
++                </h2>
++              </div>
++              {productsLoading ? (
++                <LoadingSpinner />
++              ) : products.length === 0 ? (
++                <EmptyState text="لا توجد منتجات — أضف أول منتج" />
+               ) : (
+-                <div className="overflow-x-auto">
+-                  <table className="w-full text-sm text-right text-slate-500 dark:text-slate-400">
+-                    <thead className="text-xs text-slate-700 dark:text-slate-300 uppercase bg-slate-100/70 dark:bg-slate-800/50 rounded-lg">
+-                      <tr>
+-                        <th className="px-4 py-3">المنتج</th>
+-                        <th className="px-4 py-3">SKU</th>
+-                        <th className="px-4 py-3">السعر</th>
+-                        <th className="px-4 py-3">المخزون المتبقي</th>
++                <div style={{ overflowX: 'auto' }}>
++                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
++                    <thead>
++                      <tr style={{ background: 'var(--salis-bg-surface)' }}>
++                        {['المنتج', 'SKU', 'السعر', 'المخزون'].map(h => (
++                          <th key={h} style={{
++                            padding: '10px 16px', textAlign: 'right',
++                            fontSize: '11px', fontWeight: 600,
++                            color: 'var(--salis-text-muted)',
++                            textTransform: 'uppercase', letterSpacing: '0.05em',
++                          }}>{h}</th>
++                        ))}
+                       </tr>
+                     </thead>
+-                    <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+-                      {products.map((p: any) => (
+-                        <tr key={p._id} className="border-b border-slate-100 dark:border-slate-800/40 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+-                          <td className="px-4 py-3 font-bold text-slate-900 dark:text-slate-200">{p.title}</td>
+-                          <td className="px-4 py-3 font-mono text-xs text-slate-400 dark:text-slate-500">{p.sku}</td>
+-                          <td className="px-4 py-3 font-bold text-indigo-600 dark:text-indigo-400">${p.price}</td>
+-                          <td className="px-4 py-3">
+-                            <span className={`px-2 py-1 rounded text-xs font-bold ${
+-                              p.stock > 0 
+-                                ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400" 
+-                                : "bg-rose-50 text-rose-700 dark:bg-rose-950/30 dark:text-rose-400"
+-                            }`}>
++                    <tbody>
++                      {products.map((p: Product) => (
++                        <tr key={p._id} style={{ borderTop: '1px solid var(--salis-border)' }}>
++                          <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--salis-text-primary)' }}>
++                            {p.title}
++                          </td>
++                          <td style={{ padding: '12px 16px', fontFamily: 'monospace', fontSize: '11px', color: 'var(--salis-text-muted)' }}>
++                            {p.sku}
++                          </td>
++                          <td style={{ padding: '12px 16px', fontWeight: 700, color: '#FF6B6B' }}>
++                            ₪{p.price}
++                          </td>
++                          <td style={{ padding: '12px 16px' }}>
++                            <span style={{
++                              background: p.stock > 0 ? '#DCFCE7' : '#FEE2E2',
++                              color: p.stock > 0 ? '#166534' : '#991B1B',
++                              padding: '3px 10px', borderRadius: '99px',
++                              fontSize: '11px', fontWeight: 600,
++                            }}>
+                               {p.stock} قطعة
+                             </span>
+                           </td>
+@@ -140,81 +200,103 @@ export default function App() {
+             </div>
+           </div>
+ 
+-          {/* قسم إدارة الطلبات والمبيعات الحية اللطيف */}
+-          <div className="bg-white dark:bg-slate-900/60 dark:backdrop-blur-md p-6 rounded-2xl border border-slate-100 dark:border-slate-800/80 shadow-xs">
+-            <div className="flex justify-between items-center mb-6 border-b border-slate-100 dark:border-slate-800/60 pb-4">
+-              <div>
+-                <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">🛒 طلبات الزبائن الواردة حياً</h2>
+-                <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">تتدفق الطلبات إلى هنا فور نقر الزبون على زر التأكيد في المتجر.</p>
+-              </div>
+-              <span className="bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-300 px-3 py-1 rounded-full text-xs font-bold">
+-                إجمالي الطلبات: {orders?.length || 0}
++          {/* Orders Table */}
++          <div style={{
++            background: 'var(--salis-bg-base)',
++            border: '1px solid var(--salis-border)',
++            borderRadius: '16px',
++            overflow: 'hidden',
++          }}>
++            <div style={{
++              padding: '20px 24px',
++              borderBottom: '1px solid var(--salis-border)',
++              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
++            }}>
++              <h2 style={{ fontSize: '15px', fontWeight: 700, color: 'var(--salis-text-primary)', margin: 0 }}>
++                الطلبات الواردة
++              </h2>
++              {/* شرح: هاد بيتحدث تلقائياً كل مرة يجي طلب جديد من الـ storefront */}
++              <span style={{
++                fontSize: '11px', color: 'var(--salis-text-muted)',
++                background: 'var(--salis-bg-surface)',
++                padding: '4px 10px', borderRadius: '99px',
++                border: '1px solid var(--salis-border)',
++              }}>
++                🔴 مباشر
+               </span>
+             </div>
+ 
+-            {orders === undefined && (
+-              <div className="text-center py-10">
+-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto"></div>
+-              </div>
+-            )}
+-
+-            {orders && orders.length === 0 && (
+-              <div className="text-center py-12 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+-                <p className="text-slate-500 dark:text-slate-400 text-sm">لا توجد طلبات مبيعات حتى الآن. جرب شراء منتج من بوابة الزبائن!</p>
+-              </div>
+-            )}
+-
+-            {orders && orders.length > 0 && (
+-              <div className="overflow-x-auto">
+-                <table className="w-full text-sm text-right table-auto">
+-                  <thead className="bg-slate-100/70 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 text-xs font-bold rounded-lg">
+-                    <tr>
+-                      <th className="px-4 py-3">الزبون</th>
+-                      <th className="px-4 py-3">المنتجات المطلوبة</th>
+-                      <th className="px-4 py-3">إجمالي الحساب</th>
+-                      <th className="px-4 py-3">حالة الطلب الحالية</th>
+-                      <th className="px-4 py-3 text-center">الإجراءات والسوقيات</th>
++            {ordersLoading ? (
++              <LoadingSpinner />
++            ) : orders.length === 0 ? (
++              <EmptyState text="لا توجد طلبات حتى الآن" />
++            ) : (
++              <div style={{ overflowX: 'auto' }}>
++                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
++                  <thead>
++                    <tr style={{ background: 'var(--salis-bg-surface)' }}>
++                      {['الزبون', 'المنتجات', 'الإجمالي', 'الحالة', 'إجراء'].map(h => (
++                        <th key={h} style={{
++                          padding: '10px 16px', textAlign: 'right',
++                          fontSize: '11px', fontWeight: 600,
++                          color: 'var(--salis-text-muted)',
++                          textTransform: 'uppercase', letterSpacing: '0.05em',
++                        }}>{h}</th>
++                      ))}
+                     </tr>
+                   </thead>
+-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800/60">
+-                    {orders.map((order: ConvexOrder) => (
+-                      <tr key={order._id} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/20 transition-colors">
+-                        <td className="px-4 py-4">
+-                          <div className="font-bold text-slate-900 dark:text-slate-200">{order.customerName}</div>
+-                          <div className="text-xs text-slate-400 dark:text-slate-500 font-mono mt-0.5">{order.customerPhone}</div>
+-                        </td>
+-                        <td className="px-4 py-4">
+-                          <div className="space-y-1">
+-                            {order.items?.map((item, idx) => (
+-                              <div key={idx} className="text-sm text-slate-800 dark:text-slate-300 flex items-center gap-1.5">
+-                                <span className="font-bold text-indigo-600 dark:text-indigo-400">x{item.quantity}</span>
+-                                <span>{item.title}</span>
+-                                <span className="text-xs text-slate-400 dark:text-slate-500">(${item.price})</span>
++                  <tbody>
++                    {orders.map((order: Order) => {
++                      const statusCfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending
++                      return (
++                        <tr key={order._id} style={{ borderTop: '1px solid var(--salis-border)' }}>
++                          <td style={{ padding: '14px 16px' }}>
++                            <div style={{ fontWeight: 600, color: 'var(--salis-text-primary)' }}>
++                              {order.customerName}
++                            </div>
++                            <div style={{ fontSize: '11px', color: 'var(--salis-text-muted)', fontFamily: 'monospace' }}>
++                              {order.customerPhone}
++                            </div>
++                          </td>
++                          <td style={{ padding: '14px 16px' }}>
++                            {order.items?.map((item, i) => (
++                              <div key={i} style={{ fontSize: '12px', color: 'var(--salis-text-secondary)' }}>
++                                <span style={{ fontWeight: 700, color: '#FF6B6B' }}>×{item.quantity}</span> {item.title}
+                               </div>
+                             ))}
+-                          </div>
+-                        </td>
+-                        <td className="px-4 py-4 font-black text-slate-900 dark:text-slate-100">${order.totalPrice}</td>
+-                        <td className="px-4 py-4">
+-                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
+-                            order.status === "pending" 
+-                              ? "bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400" 
+-                              : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400"
+-                          }`}>
+-                            {order.status === "pending" ? "⏳ قيد المعالجة" : "🚚 تم الشحن للعميل"}
+-                          </span>
+-                        </td>
+-                        <td className="px-4 py-4 text-center">
+-                          {order.status === "pending" ? (
+-                            <Button variant="primary" size="sm" onClick={() => handleStatusChange(order._id as any, "shipped")}>
+-                              📦 شحن المنتج الآن
+-                            </Button>
+-                          ) : (
+-                            <span className="text-xs text-slate-400 dark:text-slate-500">كامل وجاهز</span>
+-                          )}
+-                        </td>
+-                      </tr>
+-                    ))}
++                          </td>
++                          <td style={{ padding: '14px 16px', fontWeight: 700, color: 'var(--salis-text-primary)' }}>
++                            ₪{order.totalPrice}
++                          </td>
++                          <td style={{ padding: '14px 16px' }}>
++                            <span style={{
++                              background: statusCfg.bg,
++                              color: statusCfg.color,
++                              padding: '4px 10px', borderRadius: '99px',
++                              fontSize: '11px', fontWeight: 600,
++                            }}>
++                              {statusCfg.label}
++                            </span>
++                          </td>
++                          <td style={{ padding: '14px 16px' }}>
++                            {order.status === 'pending' && (
++                              <button
++                                onClick={() => updateOrderStatus(order._id, 'shipped')}
++                                style={{
++                                  padding: '7px 14px',
++                                  background: 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
++                                  color: '#fff', border: 'none',
++                                  borderRadius: '8px', fontSize: '12px',
++                                  fontWeight: 600, cursor: 'pointer',
++                                }}
++                              >
++                                شحن الآن
++                              </button>
++                            )}
++                          </td>
++                        </tr>
++                      )
++                    })}
+                   </tbody>
+                 </table>
+               </div>
+@@ -222,9 +304,51 @@ export default function App() {
+           </div>
+ 
+         </div>
++      </Authenticated>
++    </div>
++  )
++}
++
++// ─── Helper Components ─────────────────────────────────────
++function StatCard({ label, value, icon }: { label: string; value: number | string; icon: string }) {
++  return (
++    <div style={{
++      background: 'var(--salis-bg-base)',
++      border: '1px solid var(--salis-border)',
++      borderRadius: '12px',
++      padding: '16px',
++    }}>
++      <div style={{ fontSize: '1.4rem', marginBottom: '8px' }}>{icon}</div>
++      <div style={{ fontSize: '22px', fontWeight: 800, color: 'var(--salis-text-primary)', marginBottom: '4px' }}>
++        {value}
+       </div>
+-    </Authenticated>
++      <div style={{ fontSize: '12px', color: 'var(--salis-text-muted)' }}>{label}</div>
++    </div>
++  )
++}
+ 
+-  </div>
+-);
+-}
+\ No newline at end of file
++function LoadingSpinner() {
++  return (
++    <div style={{ padding: '40px', display: 'flex', justifyContent: 'center' }}>
++      <div style={{
++        width: '28px', height: '28px',
++        border: '3px solid var(--salis-border)',
++        borderTopColor: '#FF6B6B',
++        borderRadius: '50%',
++        animation: 'spin 0.7s linear infinite',
++      }} />
++      <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
++    </div>
++  )
++}
++
++function EmptyState({ text }: { text: string }) {
++  return (
++    <div style={{
++      padding: '48px', textAlign: 'center',
++      color: 'var(--salis-text-muted)', fontSize: '13px',
++    }}>
++      {text}
++    </div>
++  )
++}
+diff --git a/apps/dashboard/src/components/ProductForm.tsx b/apps/dashboard/src/components/ProductForm.tsx
+new file mode 100644
+index 0000000..df2fdaf
+--- /dev/null
++++ b/apps/dashboard/src/components/ProductForm.tsx
+@@ -0,0 +1,234 @@
++import { useState } from 'react'
++import type { ProductFormData } from '../types'
++
++interface Props {
++  onSubmit: (data: ProductFormData) => Promise<void>
++}
++
++// ─── Validation ────────────────────────────────────────────
++// بدل alert() — نعرّف errors كـ object
++// كل key هو اسم الحقل، والـ value هو رسالة الخطأ
++type FormErrors = Partial<Record<keyof ProductFormData, string>>
++
++function validate(data: typeof INITIAL_STATE): FormErrors {
++  const errors: FormErrors = {}
++  if (!data.title.trim()) errors.title = 'اسم المنتج مطلوب'
++  if (!data.sku.trim()) errors.sku = 'رمز SKU مطلوب'
++  if (!data.price || Number(data.price) <= 0) errors.price = 'أدخل سعراً صحيحاً'
++  if (Number(data.stock) < 0) errors.stock = 'الكمية لا تكون سالبة'
++  return errors
++}
++
++const INITIAL_STATE = {
++  title: '',
++  description: '',
++  price: '',
++  category: '',
++  stock: '',
++  sku: '',
++}
++
++// ─── Component ─────────────────────────────────────────────
++export function ProductForm({ onSubmit }: Props) {
++  const [form, setForm] = useState(INITIAL_STATE)
++  const [errors, setErrors] = useState<FormErrors>({})
++  const [isLoading, setIsLoading] = useState(false)
++  const [isSuccess, setIsSuccess] = useState(false)
++
++  const update = (key: keyof typeof INITIAL_STATE, value: string) => {
++    setForm(prev => ({ ...prev, [key]: value }))
++    // نمسح خطأ الحقل لما المستخدم يبدأ يكتب
++    if (errors[key as keyof ProductFormData]) {
++      setErrors(prev => ({ ...prev, [key]: undefined }))
++    }
++  }
++
++  const handleSubmit = async (e: React.FormEvent) => {
++    e.preventDefault()
++
++    // Validation
++    const errs = validate(form)
++    if (Object.keys(errs).length > 0) {
++      setErrors(errs)
++      return
++    }
++
++    setIsLoading(true)
++    try {
++      await onSubmit({
++        title: form.title.trim(),
++        description: form.description.trim(),
++        price: Number(form.price),
++        category: form.category.trim() || 'عام',
++        stock: Number(form.stock) || 0,
++        sku: form.sku.trim(),
++        // صورة افتراضية مؤقتاً — سنستبدلها بـ Convex Storage لاحقاً
++        images: ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=500'],
++      })
++      setForm(INITIAL_STATE)
++      setErrors({})
++      setIsSuccess(true)
++      setTimeout(() => setIsSuccess(false), 2500)
++    } catch (err) {
++      console.error('خطأ في إضافة المنتج:', err)
++    } finally {
++      setIsLoading(false)
++    }
++  }
++
++  return (
++    <div style={{
++      background: 'var(--salis-bg-base)',
++      border: '1px solid var(--salis-border)',
++      borderRadius: '16px',
++      padding: '24px',
++    }}>
++      <h2 style={{
++        fontSize: '16px',
++        fontWeight: 700,
++        color: 'var(--salis-text-primary)',
++        margin: '0 0 20px',
++        paddingBottom: '16px',
++        borderBottom: '1px solid var(--salis-border)',
++      }}>
++        إضافة منتج جديد
++      </h2>
++
++      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
++
++        <Field label="اسم المنتج *" error={errors.title}>
++          <input
++            value={form.title}
++            onChange={e => update('title', e.target.value)}
++            placeholder="مثال: قميص كتان بيج"
++            style={inputStyle(!!errors.title)}
++          />
++        </Field>
++
++        <Field label="رمز SKU *" error={errors.sku}>
++          <input
++            value={form.sku}
++            onChange={e => update('sku', e.target.value)}
++            placeholder="مثال: SHIRT-001"
++            dir="ltr"
++            style={inputStyle(!!errors.sku)}
++          />
++        </Field>
++
++        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
++          <Field label="السعر (₪) *" error={errors.price}>
++            <input
++              type="number"
++              value={form.price}
++              onChange={e => update('price', e.target.value)}
++              placeholder="0"
++              min="0"
++              style={inputStyle(!!errors.price)}
++            />
++          </Field>
++          <Field label="الكمية" error={errors.stock}>
++            <input
++              type="number"
++              value={form.stock}
++              onChange={e => update('stock', e.target.value)}
++              placeholder="0"
++              min="0"
++              style={inputStyle(!!errors.stock)}
++            />
++          </Field>
++        </div>
++
++        <Field label="الفئة">
++          <input
++            value={form.category}
++            onChange={e => update('category', e.target.value)}
++            placeholder="مثال: ملابس، إلكترونيات..."
++            style={inputStyle(false)}
++          />
++        </Field>
++
++        <Field label="الوصف">
++          <textarea
++            value={form.description}
++            onChange={e => update('description', e.target.value)}
++            placeholder="وصف تفصيلي عن المنتج..."
++            rows={3}
++            style={{
++              ...inputStyle(false),
++              resize: 'vertical',
++              fontFamily: 'inherit',
++            }}
++          />
++        </Field>
++
++        <button
++          type="submit"
++          disabled={isLoading}
++          style={{
++            marginTop: '4px',
++            padding: '12px',
++            borderRadius: '10px',
++            border: 'none',
++            cursor: isLoading ? 'not-allowed' : 'pointer',
++            fontSize: '14px',
++            fontWeight: 700,
++            color: '#fff',
++            background: isSuccess
++              ? '#22C55E'
++              : isLoading
++              ? 'var(--salis-border)'
++              : 'linear-gradient(135deg, #FF6B6B, #FF8E53)',
++            transition: 'background 0.3s ease',
++          }}
++        >
++          {isSuccess ? '✓ تمت الإضافة' : isLoading ? 'جاري الحفظ...' : 'حفظ المنتج'}
++        </button>
++
++      </form>
++    </div>
++  )
++}
++
++// ─── Field wrapper ─────────────────────────────────────────
++function Field({
++  label,
++  error,
++  children,
++}: {
++  label: string
++  error?: string
++  children: React.ReactNode
++}) {
++  return (
++    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
++      <label style={{
++        fontSize: '12px',
++        fontWeight: 600,
++        color: error ? '#EF4444' : 'var(--salis-text-secondary)',
++      }}>
++        {label}
++      </label>
++      {children}
++      {error && (
++        <p style={{ fontSize: '11px', color: '#EF4444', margin: 0 }}>{error}</p>
++      )}
++    </div>
++  )
++}
++
++// ─── Input style helper ────────────────────────────────────
++function inputStyle(hasError: boolean): React.CSSProperties {
++  return {
++    width: '100%',
++    padding: '10px 12px',
++    background: 'var(--salis-bg-surface)',
++    border: `1px solid ${hasError ? '#EF4444' : 'var(--salis-border)'}`,
++    borderRadius: '8px',
++    fontSize: '13px',
++    color: 'var(--salis-text-primary)',
++    outline: 'none',
++    fontFamily: 'inherit',
++    transition: 'border-color 150ms',
++    boxSizing: 'border-box',
++  }
++}
+diff --git a/apps/dashboard/src/hooks/useOrders.ts b/apps/dashboard/src/hooks/useOrders.ts
+new file mode 100644
+index 0000000..d01f659
+--- /dev/null
++++ b/apps/dashboard/src/hooks/useOrders.ts
+@@ -0,0 +1,48 @@
++import { useQuery, useMutation } from 'convex/react'
++import { api } from '../../../../convex/_generated/api'
++import type { Id } from '../../../../convex/_generated/dataModel'
++import type { Order, OrderStatus } from '../types'
++
++// ─── useOrders ─────────────────────────────────────────────
++// يعزل كل تعامل مع Convex المتعلق بالطلبات
++//
++// شرح مهم عن Convex Reactivity:
++// useQuery بيعمل real-time subscription — يعني لما زبون يطلب من الـ storefront،
++// الطلب بيظهر هنا فوراً بدون أي تدخل منك. هاد الـ magic تاع Convex.
++export function useOrders() {
++  const orders = useQuery(api.orders.getAlldetails) as Order[] | undefined
++
++  // useMutation لتحديث حالة الطلب
++  const updateStatusMutation = useMutation(api.orders.updateStatus)
++
++  const updateOrderStatus = async (orderId: string, status: OrderStatus) => {
++    try {
++      // نحوّل الـ string لـ Convex Id type
++      // هاد مهم عشان Convex يتحقق إن الـ ID صحيح قبل ما يوصل لقاعدة البيانات
++      await updateStatusMutation({
++        orderId: orderId as Id<'orders'>,
++        status,
++      })
++    } catch (error) {
++      console.error('خطأ في تحديث حالة الطلب:', error)
++      throw error
++    }
++  }
++
++  // إحصائيات مشتقة من البيانات
++  // هاد مثال على computed values — بنحسبها من البيانات الموجودة
++  // بدل ما نخزنها منفصلة في قاعدة البيانات
++  const stats = {
++    total: orders?.length ?? 0,
++    pending: orders?.filter(o => o.status === 'pending').length ?? 0,
++    shipped: orders?.filter(o => o.status === 'shipped').length ?? 0,
++    revenue: orders?.reduce((sum, o) => sum + o.totalPrice, 0) ?? 0,
++  }
++
++  return {
++    orders: orders ?? [],
++    isLoading: orders === undefined,
++    updateOrderStatus,
++    stats,
++  }
++}
+diff --git a/apps/dashboard/src/hooks/useProducts.ts b/apps/dashboard/src/hooks/useProducts.ts
+new file mode 100644
+index 0000000..4651183
+--- /dev/null
++++ b/apps/dashboard/src/hooks/useProducts.ts
+@@ -0,0 +1,32 @@
++import { useQuery, useMutation } from 'convex/react'
++import { api } from '../../../../convex/_generated/api'
++import type { Product, ProductFormData } from '../types'
++
++// ─── useProducts ───────────────────────────────────────────
++// هاد الـ hook يعزل كل تعامل مع Convex المتعلق بالمنتجات
++//
++// ليش نعمل hook منفصل بدل ما نكتب useQuery مباشرة في الـ component؟
++// ١. لو غيّرنا Convex أو استبدلناه بـ API ثاني — نعدل هون بس
++// ٢. الـ component يبقى نظيف — بس UI بدون منطق
++// ٣. سهل نعيد الاستخدام في أي مكان ثاني
++export function useProducts() {
++  // useQuery — بيعمل subscribe لـ Convex query
++  // يعني لو تغير أي منتج في قاعدة البيانات، الـ UI بيتحدث تلقائياً
++  // بدون ما تحتاج تعمل refresh أو polling
++  const products = useQuery(api.products.get) as Product[] | undefined
++
++  // useMutation — بترجع function تقدر تستدعيها لتعمل تعديل على قاعدة البيانات
++  // مختلفة عن useQuery — ما بتشتغل تلقائياً، بتستدعيها أنت لما تحتاج
++  const createProductMutation = useMutation(api.products.create)
++
++  // هاد wrapper function عشان نضيف type safety ونخفي تفاصيل Convex
++  const createProduct = async (data: ProductFormData) => {
++    await createProductMutation(data)
++  }
++
++  return {
++    products: products ?? [],
++    isLoading: products === undefined,
++    createProduct,
++  }
++}
+diff --git a/apps/dashboard/src/index.css b/apps/dashboard/src/index.css
+index b5fa404..9691a65 100644
+--- a/apps/dashboard/src/index.css
++++ b/apps/dashboard/src/index.css
+@@ -1,10 +1,52 @@
+-@tailwind base;
+-@tailwind components;
+-@tailwind utilities;
++/* ─── Salis Design Tokens — Dashboard ─────────────────────── */
++:root {
++  --salis-coral-start:    #FF6B6B;
++  --salis-coral-end:      #FF8E53;
++  --salis-bg-base:        #FFFBF7;
++  --salis-bg-surface:     #F5EFE6;
++  --salis-bg-muted:       #EDE5D8;
++  --salis-text-primary:   #1A1A2E;
++  --salis-text-secondary: #6B5E4E;
++  --salis-text-muted:     #9B8C7C;
++  --salis-border:         #E8DDD0;
++  --salis-success:        #22C55E;
++  --salis-danger:         #EF4444;
++  --salis-radius-sm:      8px;
++  --salis-radius-md:      12px;
++  --salis-radius-lg:      16px;
++}
++
++/* Dark Mode — نفس النظام تاع الـ storefront */
++[data-theme="dark"] {
++  --salis-bg-base:        #16111A;
++  --salis-bg-surface:     #211B28;
++  --salis-bg-muted:       #2D2438;
++  --salis-text-primary:   #F5EFE6;
++  --salis-text-secondary: #C4A882;
++  --salis-text-muted:     #8B7355;
++  --salis-border:         #3D3147;
++}
++
++*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
++
++html { -webkit-font-smoothing: antialiased; }
+ 
+ body {
+-  margin: 0;
+-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+-  background-color: #f9fafb;
+-  color: #111827;
+-}
+\ No newline at end of file
++  background: var(--salis-bg-base);
++  color: var(--salis-text-primary);
++  font-family: system-ui, -apple-system, sans-serif;
++  transition: background 0.25s ease, color 0.25s ease;
++}
++
++:focus-visible {
++  outline: 2px solid var(--salis-coral-start);
++  outline-offset: 2px;
++}
++
++input, textarea, button, select {
++  font-family: inherit;
++}
++
++input:focus, textarea:focus {
++  border-color: var(--salis-coral-start) !important;
++}
+diff --git a/apps/dashboard/src/types/index.ts b/apps/dashboard/src/types/index.ts
+new file mode 100644
+index 0000000..31c312c
+--- /dev/null
++++ b/apps/dashboard/src/types/index.ts
+@@ -0,0 +1,47 @@
++// ─── Product ───────────────────────────────────────────────
++// هاد الـ interface بيعرّف شكل المنتج القادم من Convex
++// كل حقل مطابق لما عرّفناه في convex/schema.ts
++export interface Product {
++  _id: string
++  _creationTime: number
++  title: string
++  description: string
++  price: number
++  category: string
++  stock: number
++  sku: string
++  images: string[]
++}
++
++// ─── Product Form Data ─────────────────────────────────────
++// هاد شكل البيانات اللي بترسلها الـ form لـ Convex
++// لاحظ إننا ما بنعرّف _id و _creationTime — Convex بيولّدهم تلقائياً
++export interface ProductFormData {
++  title: string
++  description: string
++  price: number
++  category: string
++  stock: number
++  sku: string
++  images: string[]
++}
++
++// ─── Order ─────────────────────────────────────────────────
++export type OrderStatus = 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'
++
++export interface OrderItem {
++  productId: string
++  title: string
++  quantity: number
++  price: number
++}
++
++export interface Order {
++  _id: string
++  _creationTime: number
++  customerName: string
++  customerPhone: string
++  totalPrice: number
++  status: OrderStatus
++  items: OrderItem[]
++}
+-- 
+2.43.0
+

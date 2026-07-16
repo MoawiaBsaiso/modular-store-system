@@ -20,36 +20,41 @@ export function ProductCard({ product }: Props) {
   const handleAddToCart = useCallback(async () => {
     if (!inStock || btnState !== 'idle') return
 
+    // أضف للسلة فوراً — لا نعتمد على GSAP
+    addToCart(product)
     setBtnState('adding')
 
-    // استيراد GSAP ديناميكياً
-    const { gsap } = await import('gsap')
-    const btn = btnRef.current
-    if (!btn) return
+    // أنيميشن تجميلي فقط
+    try {
+      const { gsap } = await import('gsap')
+      const btn = btnRef.current
+      if (!btn) { setBtnState('added'); setTimeout(() => setBtnState('idle'), 1800); return }
 
-    const tl = gsap.timeline()
+      const tl = gsap.timeline()
 
-    // يتقلص للمنتصف
-    tl.to(btn, {
-      scaleX: 0.88,
-      scaleY: 0.92,
-      duration: 0.12,
-      ease: 'power2.in',
-    })
+      // يتقلص للمنتصف
+      tl.to(btn, {
+        scaleX: 0.88,
+        scaleY: 0.92,
+        duration: 0.12,
+        ease: 'power2.in',
+      })
 
-    // bounce للأعلى
-    tl.to(btn, {
-      scaleX: 1,
-      scaleY: 1,
-      duration: 0.35,
-      ease: 'elastic.out(1, 0.5)',
-      onComplete: () => {
-        addToCart(product)
-        setBtnState('added')
-        // يرجع لـ idle بعد ثانيتين
-        setTimeout(() => setBtnState('idle'), 1800)
-      },
-    })
+      // bounce للأعلى
+      tl.to(btn, {
+        scaleX: 1,
+        scaleY: 1,
+        duration: 0.35,
+        ease: 'elastic.out(1, 0.5)',
+        onComplete: () => {
+          setBtnState('added')
+          setTimeout(() => setBtnState('idle'), 1800)
+        },
+      })
+    } catch {
+      setBtnState('added')
+      setTimeout(() => setBtnState('idle'), 1800)
+    }
   }, [inStock, btnState, product, addToCart])
 
   const btnLabel =

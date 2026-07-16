@@ -22,7 +22,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
 
       if (isOpen) {
         // فتح
-        gsap.set(drawerRef.current, { x: '100%' })
+        gsap.set(drawerRef.current, { x: '-100%' })
         gsap.set(overlayRef.current, { opacity: 0, pointerEvents: 'auto' })
         gsap.to(drawerRef.current, {
           x: '0%',
@@ -36,7 +36,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
       } else {
         // إغلاق
         gsap.to(drawerRef.current, {
-          x: '100%',
+          x: '-100%',
           duration: 0.35,
           ease: 'power3.in',
         })
@@ -75,14 +75,14 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
         aria-label="سلة المشتريات"
         style={{
           position: 'absolute',
-          top: 0, bottom: 0, right: 0,
+          top: 0, bottom: 0, left: 0,
           width: '100%',
           maxWidth: '420px',
           background: 'var(--bg-base)',
-          borderLeft: '1px solid var(--border)',
+          borderInlineEnd: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
-          transform: 'translateX(100%)',
+          transform: 'translateX(-100%)',
         }}
       >
         {/* Header */}

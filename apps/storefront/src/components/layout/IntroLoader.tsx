@@ -18,10 +18,10 @@ const ANIMATION_TYPE: 'typography' | 'fill' = 'typography'
 // نبدأ بـ sSali → 4 rotations → Salis
 // sSali: slot0=s(4), slot1=S(0), slot2=a(1), slot3=l(2), slot4=i(3)
 const INITIAL_SLOTS = [4, 0, 1, 2, 3]
-const ROTATIONS     = 4
-const CHARS         = ['S', 'a', 'l', 'i', 's']
-const N             = 5
-const SPREAD        = 72
+const ROTATIONS = 4
+const CHARS = ['S', 'a', 'l', 'i', 's']
+const N = 5
+const SPREAD = 72
 
 function getX(slot: number) {
   return (slot - (N - 1) / 2) * SPREAD
@@ -31,11 +31,11 @@ export function IntroLoader({ onComplete }: Props) {
   const panelTopRef = useRef<HTMLDivElement>(null)
   const panelBotRef = useRef<HTMLDivElement>(null)
   const panelSingle = useRef<HTMLDivElement>(null)
-  const stageRef    = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLDivElement>(null)
   const fillTextRef = useRef<HTMLSpanElement>(null)
   const progressRef = useRef<HTMLDivElement>(null)
-  const taglineRef  = useRef<HTMLParagraphElement>(null)
-  const wrapperRef  = useRef<HTMLDivElement>(null)
+  const taglineRef = useRef<HTMLParagraphElement>(null)
+  const wrapperRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let gsapCtx: any = null
@@ -183,14 +183,16 @@ export function IntroLoader({ onComplete }: Props) {
             ease: 'power4.inOut',
           }, '<')
 
+          // نخفي الـ wrapper نهائياً بعد انتهاء الأنيميشن
+          tl.set(wrapperRef.current, { display: 'none' })
           tl.call(onComplete)
         }
 
         // ── OPTION B ────────────────────────────────────────
         if (ANIMATION_TYPE === 'fill') {
-          gsap.set(fillTextRef.current,  { width: '0%' })
-          gsap.set(progressRef.current,  { width: '0%' })
-          gsap.set(taglineRef.current,   { opacity: 0, y: 8 })
+          gsap.set(fillTextRef.current, { width: '0%' })
+          gsap.set(progressRef.current, { width: '0%' })
+          gsap.set(taglineRef.current, { opacity: 0, y: 8 })
 
           const tl = gsap.timeline()
 
@@ -204,6 +206,7 @@ export function IntroLoader({ onComplete }: Props) {
           tl.to(panelSingle.current, {
             y: '-100%', duration: 0.9, ease: 'power4.inOut',
           })
+          tl.set(wrapperRef.current, { display: 'none' })
           tl.call(onComplete)
         }
 
@@ -215,7 +218,7 @@ export function IntroLoader({ onComplete }: Props) {
   }, [onComplete])
 
   return (
-    <div ref={wrapperRef} style={{ position: 'fixed', inset: 0, zIndex: 999 }}>
+    <div ref={wrapperRef} style={{ position: 'fixed', inset: 0 }}>
 
       {ANIMATION_TYPE === 'typography' && (
         <>

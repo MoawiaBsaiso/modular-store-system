@@ -1,10 +1,52 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* ─── Salis Design Tokens — Dashboard ─────────────────────── */
+:root {
+  --salis-coral-start:    #FF6B6B;
+  --salis-coral-end:      #FF8E53;
+  --salis-bg-base:        #FFFBF7;
+  --salis-bg-surface:     #F5EFE6;
+  --salis-bg-muted:       #EDE5D8;
+  --salis-text-primary:   #1A1A2E;
+  --salis-text-secondary: #6B5E4E;
+  --salis-text-muted:     #9B8C7C;
+  --salis-border:         #E8DDD0;
+  --salis-success:        #22C55E;
+  --salis-danger:         #EF4444;
+  --salis-radius-sm:      8px;
+  --salis-radius-md:      12px;
+  --salis-radius-lg:      16px;
+}
+
+/* Dark Mode — نفس النظام تاع الـ storefront */
+[data-theme="dark"] {
+  --salis-bg-base:        #16111A;
+  --salis-bg-surface:     #211B28;
+  --salis-bg-muted:       #2D2438;
+  --salis-text-primary:   #F5EFE6;
+  --salis-text-secondary: #C4A882;
+  --salis-text-muted:     #8B7355;
+  --salis-border:         #3D3147;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-font-smoothing: antialiased; }
 
 body {
-  margin: 0;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  background-color: #f9fafb;
-  color: #111827;
+  background: var(--salis-bg-base);
+  color: var(--salis-text-primary);
+  font-family: system-ui, -apple-system, sans-serif;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+:focus-visible {
+  outline: 2px solid var(--salis-coral-start);
+  outline-offset: 2px;
+}
+
+input, textarea, button, select {
+  font-family: inherit;
+}
+
+input:focus, textarea:focus {
+  border-color: var(--salis-coral-start) !important;
 }

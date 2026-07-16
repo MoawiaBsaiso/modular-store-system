@@ -14,7 +14,7 @@ export function Navbar({ onCartOpen, onThemeToggle, isDark }: Props) {
   return (
     <nav style={{
       width: '100%',
-      background: 'rgba(255,251,247,0.88)',
+      background: 'color-mix(in srgb, var(--bg-base) 88%, transparent)',
       backdropFilter: 'blur(14px)',
       WebkitBackdropFilter: 'blur(14px)',
       borderBottom: '1px solid var(--border)',

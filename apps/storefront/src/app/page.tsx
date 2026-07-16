@@ -39,7 +39,6 @@ export default function StorePage() {
       {/* Intro Loader */}
       <IntroLoader onComplete={handleIntroComplete} />
 
-      {/* Navbar — دايماً موجود في الـ DOM، مخفي قبل الـ intro */}
       <div style={{
         position: 'fixed',
         top: 0, left: 0, right: 0,
@@ -55,7 +54,6 @@ export default function StorePage() {
         />
       </div>
 
-      {/* المحتوى — مخفي قبل الـ intro */}
       <div style={{
         visibility: introComplete ? 'visible' : 'hidden',
         paddingTop: '64px',
