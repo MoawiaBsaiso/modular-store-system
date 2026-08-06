@@ -1,0 +1,33 @@
+:root {
+  --salis-coral-start:    #FF6B6B;
+  --salis-coral-end:      #FF8E53;
+  --salis-bg-base:        #FFFBF7;
+  --salis-bg-surface:     #F5EFE6;
+  --salis-bg-muted:       #EDE5D8;
+  --salis-text-primary:   #1A1A2E;
+  --salis-text-secondary: #6B5E4E;
+  --salis-text-muted:     #9B8C7C;
+  --salis-border:         #E8DDD0;
+  --salis-success:        #22C55E;
+  --salis-danger:         #EF4444;
+}
+
+[data-theme="dark"] {
+  --salis-bg-base:        #16111A;
+  --salis-bg-surface:     #211B28;
+  --salis-bg-muted:       #2D2438;
+  --salis-text-primary:   #F5EFE6;
+  --salis-text-secondary: #C4A882;
+  --salis-text-muted:     #8B7355;
+  --salis-border:         #3D3147;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; }
+body {
+  background: var(--salis-bg-base);
+  color: var(--salis-text-primary);
+  font-family: system-ui, sans-serif;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+input:focus, textarea:focus { border-color: var(--salis-coral-start) !important; }
