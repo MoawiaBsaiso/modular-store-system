@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useCallback } from 'react'
+import Link from 'next/link'
 import type { Product } from '@/types'
 import { useCart } from '@/features/cart/hooks/useCart'
 
@@ -127,7 +128,7 @@ export function ProductCard({ product }: Props) {
             transition: 'transform 0.35s cubic-bezier(0.16,1,0.3,1), opacity 0.3s ease',
             transitionDelay: isHovered ? '0.05s' : '0s',
           }}>
-            <span style={{
+            <Link href={`/products/${product._id}`} style={{
               display: 'block',
               background: '#fff',
               color: '#1A1A2E',
@@ -136,9 +137,10 @@ export function ProductCard({ product }: Props) {
               borderRadius: 'var(--radius-md)',
               fontSize: '13px',
               fontWeight: 700,
+              textDecoration: 'none',
             }}>
               عرض سريع
-            </span>
+            </Link>
           </div>
         </div>
 
