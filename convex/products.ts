@@ -1,9 +1,7 @@
-import { query, mutation } from "./_generated/server";
+import { query, mutation} from "../convex/_generated/server";
 import { v } from "convex/values";
 
-/**
- * 1. دالة الجلب (Query): لقراءة جميع المنتجات من قاعدة البيانات وعرضها حياً
- */
+
 export const get = query({
   args: {},
   handler: async (ctx) => {
@@ -11,15 +9,7 @@ export const get = query({
   },
 });
 
-/**
- * 2. دالة الجلب بالـ ID: لجلب منتج واحد بمعرّفه
- * نستخدمها في صفحة المنتج المفردة /products/[id]
- *
- * شرح مهم عن Convex IDs:
- * كل document في Convex عنده _id من نوع Id<"products">
- * وهو ليس string عادي — Convex يتحقق منه تلقائياً
- * v.id("products") يقول لـ Convex: "هاد الـ argument لازم يكون ID صحيح من جدول products"
- */
+
 export const getById = query({
   args: { id: v.id("products") },
   handler: async (ctx, args) => {
@@ -27,9 +17,7 @@ export const getById = query({
   },
 })
 
-/**
- * 3. دالة الإضافة (Mutation): لاستقبال بيانات المنتج الجديد وتخزينها سحابياً
- */
+
 export const create = mutation({
   args: {
     title: v.string(),

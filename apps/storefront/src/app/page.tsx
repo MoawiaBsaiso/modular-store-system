@@ -7,6 +7,7 @@ import { Navbar } from '@/components/layout/Navbar'
 import { ProductGrid } from '@/features/products/components/ProductGrid'
 import { CartDrawer } from '@/features/cart/components/CartDrawer'
 import { CheckoutModal } from '@/features/checkout/components/CheckoutModal'
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary'
 import { useLenis } from '@/lib/useLenis'
 
 export default function StorePage() {
@@ -39,6 +40,7 @@ export default function StorePage() {
       {/* Intro Loader */}
       <IntroLoader onComplete={handleIntroComplete} />
 
+      {/* Navbar — دايماً موجود في الـ DOM، مخفي قبل الـ intro */}
       <div style={{
         position: 'fixed',
         top: 0, left: 0, right: 0,
@@ -54,6 +56,7 @@ export default function StorePage() {
         />
       </div>
 
+      {/* المحتوى — مخفي قبل الـ intro */}
       <div style={{
         visibility: introComplete ? 'visible' : 'hidden',
         paddingTop: '64px',
@@ -64,7 +67,11 @@ export default function StorePage() {
           margin: '0 auto',
           padding: '0 24px 100px',
         }}>
-          <ProductGrid />
+          {/* ErrorBoundary يحمي الـ ProductGrid — لو صار خطأ في Convex
+              بيعرض fallback بدل ما تنهار الصفحة كاملة */}
+          <ErrorBoundary name="ProductGrid">
+            <ProductGrid />
+          </ErrorBoundary>
         </main>
       </div>
 

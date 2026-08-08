@@ -1,0 +1,42 @@
+diff a/apps/storefront/src/app/products/[id]/page.tsx b/apps/storefront/src/app/products/[id]/page.tsx	(rejected hunks)
+@@ -14,35 +8,27 @@ import type { Id } from '@convex/_generated/dataModel'
+ import { useCart } from '@/features/cart/hooks/useCart'
+ import type { Product } from '@/types'
+ 
+-// حالات زر الإضافة
+ type BtnState = 'idle' | 'adding' | 'added'
+ 
+ export default function ProductPage() {
+-  // useParams — hook من Next.js يعطيك الـ dynamic segments من الـ URL
+   const params  = useParams()
+   const router  = useRouter()
+   const { addToCart } = useCart()
+ 
+-  const [btnState, setBtnState]     = useState<BtnState>('idle')
+-  const [activeImg, setActiveImg]   = useState(0)
+-  const heroRef   = useRef<HTMLDivElement>(null)
+-  const infoRef   = useRef<HTMLDivElement>(null)
++  const [btnState, setBtnState]   = useState<BtnState>('idle')
++  const [activeImg, setActiveImg] = useState(0)
++  const heroRef = useRef<HTMLDivElement>(null)
++  const infoRef = useRef<HTMLDivElement>(null)
+ 
+-  // useQuery مع getById — بنمرر الـ ID من الـ URL
+-  // لو الـ ID مش صحيح Convex بيرجع null
+-  // undefined يعني لسا بيحمّل
+   const product = useQuery(
+     api.products.getById,
+     params.id ? { id: params.id as Id<'products'> } : 'skip'
+-    // 'skip' — يوقف الـ query لو ما في ID بعد
+-    // هاد pattern مهم في Convex لتجنب queries فاضية
+   ) as Product | null | undefined
+ 
+-  // أنيميشن دخول الصفحة
++  // أنيميشن دخول الصفحة — ينتظر حتى تتحمل البيانات
+   useEffect(() => {
+     if (!product) return
+     let ctx: any = null
+-
+     async function animate() {
+       const { gsap } = await import('gsap')
+       ctx = gsap.context(() => {
