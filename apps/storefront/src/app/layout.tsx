@@ -2,18 +2,7 @@ import type { Metadata } from 'next'
 import './globals.css'
 import { Providers } from '@/lib/providers'
 
-// ─── Metadata الأساسية ─────────────────────────────────────
-// Next.js بيأخذ هاد الـ object ويولّد تلقائياً:
-// <title>, <meta name="description">, og:tags, twitter:tags
-// بدون ما تكتب HTML يدوياً
-//
-// شرح الـ properties:
-// metadataBase — الـ base URL للمشروع، لازم لتوليد og:image
-// title.default — العنوان الافتراضي
-// title.template — لو صفحة ثانية ما عرّفت title، بتاخد هاد القالب
-// openGraph — بيانات المشاركة على وسائل التواصل (Facebook, LinkedIn)
-// twitter — بيانات Twitter Cards
-// robots — بيقول لـ Google crawler كيف يتعامل مع الصفحة
+
 
 export const metadata: Metadata = {
   metadataBase: new URL(
@@ -23,8 +12,7 @@ export const metadata: Metadata = {
   title: {
     default: 'Salis — تسوق ببساطة',
     template: '%s | Salis',
-    // %s بيتحول لعنوان الصفحة الفرعية
-    // مثال: صفحة منتج → "قميص كتان | Salis"
+  
   },
 
   description:
@@ -34,7 +22,7 @@ export const metadata: Metadata = {
 
   authors: [{ name: 'Salis Team' }],
 
-  // openGraph — بيانات المشاركة على وسائل التواصل
+  // openGraph — 
   openGraph: {
     type: 'website',
     locale: 'ar_AR',
@@ -43,7 +31,7 @@ export const metadata: Metadata = {
     description: 'منصة تسوق إلكتروني بسيطة وسريعة.',
     images: [
       {
-        url: '/og-image.png',  // سنضيف هاد الملف لاحقاً
+        url: '/og-image.png',  
         width: 1200,
         height: 630,
         alt: 'Salis — متجرك الإلكتروني',
@@ -61,8 +49,8 @@ export const metadata: Metadata = {
 
   // robots — تعليمات لـ Google crawler
   robots: {
-    index: true,       // اسمح لـ Google يفهرس الصفحة
-    follow: true,      // اتبع الروابط في الصفحة
+    index: true,       // 
+    follow: true,      // 
     googleBot: {
       index: true,
       follow: true,

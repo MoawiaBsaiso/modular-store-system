@@ -75,7 +75,7 @@ export default function StorePage() {
         </main>
       </div>
 
-      {/* Cart Drawer — دايماً خارج الـ visibility wrapper */}
+      {/* Cart Drawer  */}
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
