@@ -88,8 +88,8 @@ export const placeOrder = action({
       items: args.items,
     })) as string;
 
-    // 💡 ضع رابط النفق الخاص بك هنا بدقة متبوعاً بـ /webhook-test/orders
-    const n8nWebhookUrl = "http://127.0.0.1:5678/webhook-test/orders"; 
+    // الـ URL من env variable — حطه في Convex Dashboard → Settings → Environment Variables
+    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL ?? "http://127.0.0.1:5678/webhook-test/orders"
 
     // ب. إرسال البيانات فوراً لـ n8n
     try {

@@ -13,6 +13,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
   const { cart, cartCount, cartTotal, removeFromCart, updateQuantity } = useCart()
   const drawerRef = useRef<HTMLDivElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
+  const itemsRef   = useRef<HTMLDivElement>(null)
 
   // GSAP — أنيميشن فتح وإغلاق الـ drawer
   useEffect(() => {
@@ -22,7 +23,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
 
       if (isOpen) {
         // فتح
-        gsap.set(drawerRef.current, { x: '-100%' })
+        gsap.set(drawerRef.current, { x: '100%' })
         gsap.set(overlayRef.current, { opacity: 0, pointerEvents: 'auto' })
         gsap.to(drawerRef.current, {
           x: '0%',
@@ -33,10 +34,23 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
           opacity: 1,
           duration: 0.3,
         })
+
+        // stagger على الـ items بعد ما الـ drawer يفتح
+        const items = itemsRef.current?.querySelectorAll('.cart-item')
+        if (items?.length) {
+          gsap.set(items, { opacity: 0, x: 24 })
+          gsap.to(items, {
+            opacity: 1, x: 0,
+            duration: 0.35,
+            ease: 'power3.out',
+            stagger: 0.06,
+            delay: 0.25,
+          })
+        }
       } else {
         // إغلاق
         gsap.to(drawerRef.current, {
-          x: '-100%',
+          x: '100%',
           duration: 0.35,
           ease: 'power3.in',
         })
@@ -75,14 +89,14 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
         aria-label="سلة المشتريات"
         style={{
           position: 'absolute',
-          top: 0, bottom: 0, left: 0,
+          top: 0, bottom: 0, right: 0,
           width: '100%',
           maxWidth: '420px',
           background: 'var(--bg-base)',
-          borderInlineEnd: '1px solid var(--border)',
+          borderLeft: '1px solid var(--border)',
           display: 'flex',
           flexDirection: 'column',
-          transform: 'translateX(-100%)',
+          transform: 'translateX(100%)',
         }}
       >
         {/* Header */}
@@ -123,7 +137,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
         </div>
 
         {/* Items */}
-        <div style={{
+        <div ref={itemsRef} style={{
           flex: 1, overflowY: 'auto',
           padding: '16px 24px',
           display: 'flex', flexDirection: 'column', gap: '12px',
@@ -134,7 +148,7 @@ export function CartDrawer({ isOpen, onClose, onCheckout }: Props) {
               <p style={{ fontSize: '14px', margin: 0 }}>سلتك فارغة</p>
             </div>
           ) : cart.map(item => (
-            <div key={item.id} style={{
+            <div key={item.id} className="cart-item" style={{
               display: 'flex', gap: '12px', alignItems: 'center',
               background: 'var(--bg-surface)',
               borderRadius: 'var(--radius-md)',
