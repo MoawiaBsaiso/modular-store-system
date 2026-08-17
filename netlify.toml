@@ -1,0 +1,9 @@
+# ─── Netlify Configuration — Salis Storefront ──────────────
+
+[build]
+  base    = "apps/storefront"
+  command = "npm install && npm run build"
+  publish = "apps/storefront/.next"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

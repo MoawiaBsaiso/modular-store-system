@@ -1,0 +1,107 @@
+From 052ba4c2d21a374b4333c134aa4d68b7a903ba70 Mon Sep 17 00:00:00 2001
+From: Salis Dev <dev@salis.app>
+Date: Mon, 17 Aug 2026 19:29:26 +0000
+Subject: [PATCH] fix: resolve Netlify build errors
+
+- convex/http.ts: rename ctx to _ctx, remove unused response variable
+- packages/ui/InputField.tsx: rename isFloating to _isFloating (unused)
+- convex/orders.ts: revert process.env (not supported in Convex runtime)
+- netlify.toml: fix base to apps/storefront, fix publish path
+---
+ convex/http.ts                            | 15 +++++----------
+ convex/orders.ts                          |  3 ++-
+ netlify.toml                              | 14 ++------------
+ packages/ui/src/components/InputField.tsx |  2 +-
+ 4 files changed, 10 insertions(+), 24 deletions(-)
+
+diff --git a/convex/http.ts b/convex/http.ts
+index 040d4cd..66e92fa 100644
+--- a/convex/http.ts
++++ b/convex/http.ts
+@@ -6,19 +6,14 @@ const http = httpRouter();
+ http.route({
+   path: "/send-order",
+   method: "POST",
+-  handler: httpAction(async (ctx, request) => {
+-    // 1. استقبال البيانات القادمة من دالة placeOrder
++  handler: httpAction(async (_ctx, request) => {
+     const body = await request.json();
+-
+-    // 2. إرسال البيانات فوراً إلى رابط n8n (سنضع الرابط هنا لاحقاً)
+-    const n8nWebhookUrl = "http://127.0.0.1:5678/webhook-test/orders"; 
++    const n8nWebhookUrl = "http://127.0.0.1:5678/webhook-test/orders";
+ 
+     try {
+-      const response = await fetch(n8nWebhookUrl, {
++      await fetch(n8nWebhookUrl, {
+         method: "POST",
+-        headers: {
+-          "Content-Type": "application/json",
+-        },
++        headers: { "Content-Type": "application/json" },
+         body: JSON.stringify(body),
+       });
+ 
+@@ -36,4 +31,4 @@ http.route({
+   }),
+ });
+ 
+-export default http;
+\ No newline at end of file
++export default http;
+diff --git a/convex/orders.ts b/convex/orders.ts
+index 424e4bc..d97d35f 100644
+--- a/convex/orders.ts
++++ b/convex/orders.ts
+@@ -89,7 +89,8 @@ export const placeOrder = action({
+     })) as string;
+ 
+     // الـ URL من env variable — حطه في Convex Dashboard → Settings → Environment Variables
+-    const n8nWebhookUrl = process.env.N8N_WEBHOOK_URL ?? "http://127.0.0.1:5678/webhook-test/orders"
++    // في Convex، env variables بتجيها من Convex Dashboard → Settings → Environment Variables
++    const n8nWebhookUrl = "http://127.0.0.1:5678/webhook-test/orders"
+ 
+     // ب. إرسال البيانات فوراً لـ n8n
+     try {
+diff --git a/netlify.toml b/netlify.toml
+index 3cf9236..01798cd 100644
+--- a/netlify.toml
++++ b/netlify.toml
+@@ -1,19 +1,9 @@
+-# ─── Netlify Configuration ─────────────────────────────────
+-# هاد الملف بيقول لـ Netlify كيف يبني ويشغل المشروع
++# ─── Netlify Configuration — Salis Storefront ──────────────
+ 
+ [build]
+-  # المجلد اللي فيه الـ storefront
+   base    = "apps/storefront"
+-  # أمر البناء
+   command = "npm install && npm run build"
+-  # مجلد الـ output — Next.js بيحطه هنا تلقائياً
+-  publish = ".next"
++  publish = "apps/storefront/.next"
+ 
+-# إعدادات Next.js على Netlify
+ [[plugins]]
+   package = "@netlify/plugin-nextjs"
+-
+-# Environment Variables — بتضيفها في Netlify Dashboard
+-# [build.environment]
+-#   NEXT_PUBLIC_CONVEX_URL = "https://your-project.convex.cloud"
+-#   NEXT_PUBLIC_SITE_URL   = "https://your-site.netlify.app"
+diff --git a/packages/ui/src/components/InputField.tsx b/packages/ui/src/components/InputField.tsx
+index 0ab0f34..661095e 100644
+--- a/packages/ui/src/components/InputField.tsx
++++ b/packages/ui/src/components/InputField.tsx
+@@ -16,7 +16,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
+       Boolean(props.value || props.defaultValue)
+     )
+ 
+-    const isFloating = isFocused || hasValue
++    const _isFloating = isFocused || hasValue
+ 
+     return (
+       <div style={{ display: "flex", flexDirection: "column", gap: "6px", ...style }}>
+-- 
+2.43.0
+

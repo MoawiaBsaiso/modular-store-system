@@ -16,7 +16,7 @@ export const InputField = React.forwardRef<HTMLInputElement, InputFieldProps>(
       Boolean(props.value || props.defaultValue)
     )
 
-    const isFloating = isFocused || hasValue
+    const _isFloating = isFocused || hasValue
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "6px", ...style }}>
