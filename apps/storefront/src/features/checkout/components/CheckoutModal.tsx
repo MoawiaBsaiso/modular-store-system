@@ -1,5 +1,6 @@
 'use client'
 
+import { useEffect } from 'react'
 import { useCheckout } from '../hooks/useCheckout'
 import { useCart } from '@/features/cart/hooks/useCart'
 
@@ -14,8 +15,23 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
     customerName, setCustomerName,
     customerPhone, setCustomerPhone,
     isLoading, isSuccess, error,
-    submitOrder,
+    submitOrder, reset,
   } = useCheckout()
+
+  // Close modal automatically 2.5s after success and reset form
+  useEffect(() => {
+    if (!isSuccess) return
+    const timer = setTimeout(() => {
+      onClose()
+      reset()
+    }, 2500)
+    return () => clearTimeout(timer)
+  }, [isSuccess, onClose, reset])
+
+  // Reset form when modal closes
+  useEffect(() => {
+    if (!isOpen) reset()
+  }, [isOpen, reset])
 
   if (!isOpen) return null
 
@@ -27,18 +43,15 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: '16px',
     }}>
-      {/* Overlay */}
       <div onClick={handleClose} style={{
         position: 'absolute', inset: 0,
         background: 'rgba(26,26,46,0.6)',
         backdropFilter: 'blur(6px)',
       }} />
 
-      {/* Modal */}
       <div style={{
         position: 'relative',
-        width: '100%',
-        maxWidth: '440px',
+        width: '100%', maxWidth: '440px',
         background: 'var(--bg-base)',
         borderRadius: 'var(--radius-xl)',
         border: '1px solid var(--border)',
@@ -46,7 +59,6 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
         boxShadow: '0 24px 80px rgba(26,26,46,0.2)',
       }}>
         {isSuccess ? (
-          // حالة النجاح
           <div style={{ textAlign: 'center', padding: '20px 0' }}>
             <div style={{ fontSize: '3.5rem', marginBottom: '16px' }}>🎉</div>
             <h3 style={{ fontSize: '20px', fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 8px' }}>
@@ -58,7 +70,6 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
           </div>
         ) : (
           <>
-            {/* Header */}
             <div style={{ marginBottom: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
@@ -69,21 +80,17 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
                     {cartCount} منتج · الإجمالي ₪{cartTotal.toFixed(2)}
                   </p>
                 </div>
-                <button onClick={handleClose} aria-label="إغلاق"
-                  style={{
-                    width: '30px', height: '30px',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    background: 'var(--bg-surface)',
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-sm)',
-                    cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '16px',
-                  }}>
-                  ✕
-                </button>
+                <button onClick={handleClose} aria-label="إغلاق" style={{
+                  width: '30px', height: '30px',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: 'var(--bg-surface)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 'var(--radius-sm)',
+                  cursor: 'pointer', color: 'var(--text-secondary)', fontSize: '16px',
+                }}>✕</button>
               </div>
             </div>
 
-            {/* Form */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '8px' }}>
@@ -126,8 +133,7 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
                     borderRadius: 'var(--radius-md)',
                     fontSize: '14px', color: 'var(--text-primary)',
                     outline: 'none', transition: 'border-color var(--duration-fast)',
-                    textAlign: 'right',
-                    fontFamily: 'monospace',
+                    textAlign: 'right', fontFamily: 'monospace',
                   }}
                   onFocus={e => (e.target.style.borderColor = 'var(--border-focus)')}
                   onBlur={e => (e.target.style.borderColor = 'var(--border)')}
@@ -139,8 +145,7 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
                   fontSize: '13px', color: 'var(--danger)',
                   background: '#EF444415',
                   borderRadius: 'var(--radius-sm)',
-                  padding: '10px 14px',
-                  margin: 0,
+                  padding: '10px 14px', margin: 0,
                 }}>
                   {error}
                 </p>
@@ -150,8 +155,7 @@ export function CheckoutModal({ isOpen, onClose }: Props) {
                 onClick={submitOrder}
                 disabled={isLoading}
                 style={{
-                  marginTop: '4px',
-                  width: '100%', padding: '14px',
+                  marginTop: '4px', width: '100%', padding: '14px',
                   borderRadius: 'var(--radius-md)',
                   border: 'none', cursor: isLoading ? 'not-allowed' : 'pointer',
                   fontSize: '15px', fontWeight: 700, color: '#fff',
