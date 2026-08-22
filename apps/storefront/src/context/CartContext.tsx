@@ -1,8 +1,10 @@
 'use client'
 
-import { createContext, useContext, useState, useCallback } from 'react'
+import { createContext, useContext, useState, useCallback, useEffect } from 'react'
 import type { ReactNode } from 'react'
 import type { CartItem, Product } from '@/types'
+
+const CART_KEY = 'salis_cart'
 
 interface CartContextValue {
   cart: CartItem[]
@@ -18,6 +20,28 @@ const CartContext = createContext<CartContextValue | undefined>(undefined)
 
 export function CartProvider({ children }: { children: ReactNode }) {
   const [cart, setCart] = useState<CartItem[]>([])
+  const [mounted, setMounted] = useState(false)
+
+  // Load cart from localStorage after hydration
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(CART_KEY)
+      if (saved) setCart(JSON.parse(saved))
+    } catch {
+      // Ignore parse errors
+    }
+    setMounted(true)
+  }, [])
+
+  // Persist cart to localStorage on every change
+  useEffect(() => {
+    if (!mounted) return
+    try {
+      localStorage.setItem(CART_KEY, JSON.stringify(cart))
+    } catch {
+      // Ignore storage errors
+    }
+  }, [cart, mounted])
 
   const addToCart = useCallback((product: Product) => {
     setCart(prev => {
